@@ -1,0 +1,23 @@
+[tools]
+# 1.94.0 — 1.83.0 is too old for some transitive dependencies' MSRV.
+rust = "1.94.0"
+
+[tasks.build]
+run = 'cargo build'
+
+[tasks.test]
+run = 'cargo test'
+
+[tasks.release]
+# Emits target/release/libwebkitadblock.a (linked into the WebKit framework by U2).
+run = 'cargo build --release'
+
+[tasks.lint]
+run = 'cargo clippy --all-targets -- --deny warnings'
+
+[tasks.fmt]
+run = 'cargo fmt --check'
+
+[tasks.check]
+# Full local verification gate (U1 Verification Contract).
+depends = ['fmt', 'lint', 'test']
