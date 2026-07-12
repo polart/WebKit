@@ -62,6 +62,65 @@ fn exception_rule_unblocks_request() {
 }
 
 #[test]
+fn important_rule_sets_important_flag() {
+    let engine = Engine::from_rules_bytes(b"||ads.example.com^$script,important\n").unwrap();
+    let result = engine.check(
+        "https://ads.example.com/banner.js",
+        "ads.example.com",
+        "news.example.com",
+        "script",
+        true,
+        false,
+        false,
+    );
+    assert!(result.matched);
+    assert!(
+        result.important,
+        "expected the $important flag to be reported"
+    );
+
+    // A plain block rule is matched but not important.
+    let plain = Engine::from_rules_bytes(b"||ads.example.com^$script\n").unwrap();
+    let plain_result = plain.check(
+        "https://ads.example.com/banner.js",
+        "ads.example.com",
+        "news.example.com",
+        "script",
+        true,
+        false,
+        false,
+    );
+    assert!(plain_result.matched);
+    assert!(!plain_result.important);
+}
+
+#[test]
+fn redirect_rule_populates_redirect_body() {
+    // `content` is base64 for "()=>{}" (a noop script).
+    let json = r#"[{"name":"noop.js","aliases":["noopjs"],"kind":{"mime":"application/javascript"},"content":"KCk9Pnt9"}]"#;
+    let storage = ResourceStorage::from_json(json);
+
+    let mut engine =
+        Engine::from_rules_bytes(b"||ads.example.com^$script,redirect=noop.js\n").unwrap();
+    engine.use_resources(&storage);
+
+    let result = engine.check(
+        "https://ads.example.com/banner.js",
+        "ads.example.com",
+        "news.example.com",
+        "script",
+        true,
+        false,
+        false,
+    );
+    assert!(result.matched);
+    assert!(
+        result.redirect.has_value,
+        "expected the redirect body to be populated"
+    );
+}
+
+#[test]
 fn csp_directives_returned_for_csp_rule_only() {
     let engine = Engine::from_rules_bytes(b"||example.com^$csp=script-src 'none'\n").unwrap();
 

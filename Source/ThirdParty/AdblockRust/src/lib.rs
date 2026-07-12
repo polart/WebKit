@@ -95,7 +95,8 @@ mod ffi {
             third_party_request: bool,
         ) -> String;
         /// Serializes the engine to a binary `.dat` blob. A zero-length result
-        /// indicates a serialization failure.
+        /// signals a caught panic at the FFI boundary (the underlying
+        /// serialization is otherwise infallible).
         fn serialize(&self) -> Vec<u8>;
         /// Loads a binary-serialized engine. Returns false on failure without
         /// panicking (corrupt/garbage input is rejected).
