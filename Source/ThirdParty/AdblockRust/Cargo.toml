@@ -1,0 +1,31 @@
+[package]
+name = "webkit-adblock"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+description = "cxx FFI bridge exposing the adblock-rust `adblock` crate to WebKit (ENABLE(ADBLOCK))."
+publish = false
+
+# Keep this crate standalone: it is built by an Xcode script phase (U2), not as
+# part of any surrounding cargo workspace.
+[workspace]
+
+[lib]
+name = "webkitadblock"
+# `staticlib` produces libwebkitadblock.a for the WebKit framework link (KTD1);
+# `rlib` lets `cargo test` build the in-crate test harness.
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+# Pin adblock to the 0.12.x line Brave ships (KTD2). Use the embedded domain
+# resolver instead of a Chromium-style C++ callback.
+adblock = { version = "0.12", default-features = false, features = [
+    "embedded-domain-resolver",
+    "full-regex-handling",
+    "single-thread",
+    "css-validation",
+    "resource-assembler",
+] }
+cxx = "1.0"
+serde_json = "1.0"
+thiserror = "1.0"
