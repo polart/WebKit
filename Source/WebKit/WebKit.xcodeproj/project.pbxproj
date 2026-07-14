@@ -20383,6 +20383,7 @@
 				8DC2EF520486A6940098B216 /* Resources */,
 				372589431C1E496800C92CA9 /* Copy Shims */,
 				1A07D2F71919B36500ECDA16 /* Copy Message Generation Scripts */,
+				ADB10C00ADB10C0000000001 /* Build Adblock Rust */,
 				8DC2EF540486A6940098B216 /* Sources */,
 				8DC2EF560486A6940098B216 /* Frameworks */,
 				5DF408C5131DD46700130071 /* Check For Weak VTables and Externals */,
@@ -20814,6 +20815,28 @@
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/zsh;
 			shellScript = "\"${SRCROOT}/Scripts/create-symlink-to-cryptex.sh\"\n";
+		};
+		ADB10C00ADB10C0000000001 /* Build Adblock Rust */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Scripts/build-adblock-rust.sh",
+			);
+			name = "Build Adblock Rust";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/libwebkitadblock.a",
+				"$(BUILT_PRODUCTS_DIR)/AdblockRust/webkit-adblock/src/lib.rs.h",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "Scripts/build-adblock-rust.sh\n";
 		};
 		2D7DEBDF21269C9F00B9F73C /* Generate Unified Sources */ = {
 			isa = PBXShellScriptBuildPhase;

@@ -81,7 +81,20 @@ OUTPUT_CRYPTEX_SYMLINK_PATH_YES_YES = $(DSTROOT)$(CRYPTEX_SYMLINK_PATH)/$(FULL_P
 // This should match the rest of WebKit and use `-Onone`, but it negatively impacts build time.
 SWIFT_OPTIMIZATION_LEVEL[config=Debug] = -O;
 
-LIBRARY_SEARCH_PATHS = $(inherited) "$(WEBCORE_LIBRARY_DIR)";
+// Adblock (ENABLE(ADBLOCK), U2): link libwebkitadblock.a into WebKit.framework
+// only. This is the one target that runs the "Build Adblock Rust" phase that
+// produces the archive, and the framework covers both the NetworkProcess and
+// WebProcess code that use it. Scoped here rather than in BaseTarget.xcconfig so
+// -lwebkitadblock does not leak into sibling targets (XPC services, helper
+// tools) that share BaseTarget but never build the archive. Mirrors the
+// libwebrtc link pattern above. ENABLE_ADBLOCK is defined in BaseTarget.xcconfig
+// (included above), so it is in scope here.
+WK_ADBLOCK_LDFLAGS = $(WK_ADBLOCK_LDFLAGS_$(ENABLE_ADBLOCK));
+WK_ADBLOCK_LDFLAGS_1 = -lwebkitadblock;
+WK_ADBLOCK_LIBRARY_SEARCH_PATHS = $(WK_ADBLOCK_LIBRARY_SEARCH_PATHS_$(ENABLE_ADBLOCK));
+WK_ADBLOCK_LIBRARY_SEARCH_PATHS_1 = "$(BUILT_PRODUCTS_DIR)";
+
+LIBRARY_SEARCH_PATHS = $(inherited) "$(WEBCORE_LIBRARY_DIR)" $(WK_ADBLOCK_LIBRARY_SEARCH_PATHS);
 
 BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 SWIFT_INSTALL_OBJC_HEADER = NO;
@@ -312,7 +325,7 @@ RPATH_LDFLAGS = $(RPATH_LDFLAGS_$(USE_STAGING_INSTALL_PATH));
 // StagedFrameworks/WebKit.framework/Versions/A/ => StagedFrameworks/
 RPATH_LDFLAGS_YES = -rpath @loader_path/../../..;
 
-OTHER_LDFLAGS = $(inherited) -lsqlite3 -iframework $(SDK_DIR)$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks $(UNEXPORTED_SYMBOL_LDFLAGS) $(FRAMEWORK_AND_LIBRARY_LDFLAGS) $(OTHER_LDFLAGS_DELAY_INIT) $(OTHER_LDFLAGS_SHARED_CACHE) $(SOURCE_VERSION_LDFLAGS) $(WK_PGO_USE_LDFLAGS) $(WK_PGO_GEN_FLAGS) $(WK_NO_STATIC_INITIALIZERS) $(RPATH_LDFLAGS);
+OTHER_LDFLAGS = $(inherited) -lsqlite3 -iframework $(SDK_DIR)$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks $(UNEXPORTED_SYMBOL_LDFLAGS) $(FRAMEWORK_AND_LIBRARY_LDFLAGS) $(OTHER_LDFLAGS_DELAY_INIT) $(OTHER_LDFLAGS_SHARED_CACHE) $(SOURCE_VERSION_LDFLAGS) $(WK_PGO_USE_LDFLAGS) $(WK_PGO_GEN_FLAGS) $(WK_NO_STATIC_INITIALIZERS) $(RPATH_LDFLAGS) $(WK_ADBLOCK_LDFLAGS);
 
 OTHER_LDFLAGS_DELAY_INIT[sdk=iphone*] = -Wl,-delay_framework,CoreTelephony;
 OTHER_LDFLAGS_DELAY_INIT[sdk=appletv*] = ;
