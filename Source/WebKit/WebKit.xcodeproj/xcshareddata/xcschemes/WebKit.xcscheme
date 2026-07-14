@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8DC2EF4F0486A6940098B216"
-               BuildableName = "WebKit.framework"
+               BuildableName = ".framework"
                BlueprintName = "WebKit"
                ReferencedContainer = "container:WebKit.xcodeproj">
             </BuildableReference>
@@ -51,7 +51,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8DC2EF4F0486A6940098B216"
-            BuildableName = "WebKit.framework"
+            BuildableName = ".framework"
             BlueprintName = "WebKit"
             ReferencedContainer = "container:WebKit.xcodeproj">
          </BuildableReference>

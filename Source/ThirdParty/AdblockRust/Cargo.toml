@@ -29,3 +29,11 @@ adblock = { version = "0.12", default-features = false, features = [
 cxx = "1.0"
 serde_json = "1.0"
 thiserror = "1.0"
+
+[build-dependencies]
+# Compiles the cxx-generated C++ shim (and the cxx runtime) into
+# libwebkitadblock.a and emits the generated headers under target/cxxbridge/
+# (U2 build integration). This is the cargo-native equivalent of the
+# `cxx_bindings` parameter Chromium's GN rust_static_library gives Brave.
+# Kept in lockstep with the `cxx` version above.
+cxx-build = "1.0"
