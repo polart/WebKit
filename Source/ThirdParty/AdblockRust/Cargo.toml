@@ -10,6 +10,20 @@ publish = false
 # part of any surrounding cargo workspace.
 [workspace]
 
+# Build with panic=abort so no Rust unwinding landing pads (and thus no
+# `_rust_eh_personality`) are emitted. WebKit.framework already links Swift, C++,
+# and Objective-C exception personalities; a fourth (Rust) overflows macOS's
+# 3-personality compact-unwind limit at link time. This matches Chromium/Brave,
+# which compile all Rust with panic=abort and rely on adblock-rust being
+# panic-free on untrusted filter lists rather than on catching panics at the FFI
+# boundary. cargo forces unwind for the test profile, so `cargo test` is
+# unaffected.
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 [lib]
 name = "webkitadblock"
 # `staticlib` produces libwebkitadblock.a for the WebKit framework link (KTD1);

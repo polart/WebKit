@@ -8,7 +8,7 @@ use std::sync::Arc;
 use adblock::resources::{InMemoryResourceStorage, Resource, ResourceImpl, ResourceStorageBackend};
 use cxx::CxxString;
 
-use crate::support::{cxx_str, guard};
+use crate::support::cxx_str;
 
 /// A shareable scriptlet/redirect resource library, cloneable by `Arc`.
 #[derive(Clone)]
@@ -61,7 +61,7 @@ impl ResourceStorage {
 }
 
 pub fn new_resource_storage(resources_json: &CxxString) -> Box<ResourceStorage> {
-    guard(|| ResourceStorage::from_json_boxed(cxx_str(resources_json)))
+    ResourceStorage::from_json_boxed(cxx_str(resources_json))
 }
 
 pub fn new_empty_resource_storage() -> Box<ResourceStorage> {

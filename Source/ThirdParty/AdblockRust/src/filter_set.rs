@@ -8,7 +8,6 @@ use cxx::CxxVector;
 
 use crate::ffi::{FilterListMetadata, FilterListMetadataResult};
 use crate::result::InternalError;
-use crate::support::guard_result;
 
 /// Accumulates parsed filters from one or more lists before an engine is built.
 pub struct FilterSet(InnerFilterSet);
@@ -61,7 +60,7 @@ impl FilterSet {
         rules: &CxxVector<u8>,
         permission_mask: u8,
     ) -> FilterListMetadataResult {
-        guard_result(|| self.add_list(rules.as_slice(), permission_mask))
+        self.add_list(rules.as_slice(), permission_mask).into()
     }
 }
 

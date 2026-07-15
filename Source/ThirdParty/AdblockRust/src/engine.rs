@@ -14,7 +14,7 @@ use crate::ffi::{BlockerResult, BoxEngineResult, FilterListMetadata, VecStringRe
 use crate::filter_set::FilterSet;
 use crate::resource_storage::ResourceStorage;
 use crate::result::InternalError;
-use crate::support::{cxx_str, cxx_str_vec, guard, guard_result};
+use crate::support::{cxx_str, cxx_str_vec};
 
 /// A wrapper around adblock-rust's `Engine`. Not `Send + Sync` under the
 /// `single-thread` feature; the C++ side confines it to a dedicated work queue
@@ -137,7 +137,7 @@ impl Engine {
             .hidden_class_id_selectors(classes, ids, exceptions)
     }
 
-    // --- cxx bridge methods (thin wrappers with panic guards). ---
+    // --- cxx bridge methods (thin wrappers over the native API). ---
 
     #[allow(clippy::too_many_arguments)]
     pub fn matches(
@@ -150,17 +150,15 @@ impl Engine {
         previously_matched_rule: bool,
         force_check_exceptions: bool,
     ) -> BlockerResult {
-        guard(|| {
-            self.check(
-                cxx_str(url),
-                cxx_str(hostname),
-                cxx_str(source_hostname),
-                cxx_str(request_type),
-                third_party_request,
-                previously_matched_rule,
-                force_check_exceptions,
-            )
-        })
+        self.check(
+            cxx_str(url),
+            cxx_str(hostname),
+            cxx_str(source_hostname),
+            cxx_str(request_type),
+            third_party_request,
+            previously_matched_rule,
+            force_check_exceptions,
+        )
     }
 
     pub fn get_csp_directives(
@@ -171,34 +169,30 @@ impl Engine {
         request_type: &CxxString,
         third_party_request: bool,
     ) -> String {
-        guard(|| {
-            self.csp(
-                cxx_str(url),
-                cxx_str(hostname),
-                cxx_str(source_hostname),
-                cxx_str(request_type),
-                third_party_request,
-            )
-        })
+        self.csp(
+            cxx_str(url),
+            cxx_str(hostname),
+            cxx_str(source_hostname),
+            cxx_str(request_type),
+            third_party_request,
+        )
     }
 
     pub fn serialize(&self) -> Vec<u8> {
-        guard(|| self.serialize_bytes())
+        self.serialize_bytes()
     }
 
     pub fn deserialize(&mut self, serialized: &CxxVector<u8>) -> bool {
-        guard(|| self.deserialize_bytes(serialized.as_slice()).is_ok())
+        self.deserialize_bytes(serialized.as_slice()).is_ok()
     }
 
     pub fn use_resource_storage(&mut self, storage: &ResourceStorage) {
-        guard(|| self.use_resources(storage))
+        self.use_resources(storage)
     }
 
     pub fn url_cosmetic_resources(&self, url: &CxxString) -> String {
-        guard(|| {
-            self.cosmetic_resources_json(cxx_str(url))
-                .unwrap_or_default()
-        })
+        self.cosmetic_resources_json(cxx_str(url))
+            .unwrap_or_default()
     }
 
     pub fn hidden_class_id_selectors(
@@ -207,12 +201,10 @@ impl Engine {
         ids: &CxxVector<CxxString>,
         exceptions: &CxxVector<CxxString>,
     ) -> VecStringResult {
-        guard_result(|| {
-            let classes = cxx_str_vec(classes);
-            let ids = cxx_str_vec(ids);
-            let exceptions: HashSet<String> = cxx_str_vec(exceptions).into_iter().collect();
-            Ok(self.hidden_selectors(&classes, &ids, &exceptions))
-        })
+        let classes = cxx_str_vec(classes);
+        let ids = cxx_str_vec(ids);
+        let exceptions: HashSet<String> = cxx_str_vec(exceptions).into_iter().collect();
+        Ok::<_, InternalError>(self.hidden_selectors(&classes, &ids, &exceptions)).into()
     }
 }
 
@@ -223,11 +215,14 @@ pub fn new_engine() -> Box<Engine> {
 }
 
 pub fn engine_with_rules(rules: &CxxVector<u8>) -> BoxEngineResult {
-    guard_result(|| Engine::from_rules_bytes(rules.as_slice()))
+    Engine::from_rules_bytes(rules.as_slice()).into()
 }
 
+// The `Box<FilterSet>` parameter is dictated by the cxx bridge (owned opaque
+// types cross as `Box`), so clippy's boxed-local suggestion does not apply.
+#[allow(clippy::boxed_local)]
 pub fn engine_from_filter_set(filter_set: Box<FilterSet>) -> BoxEngineResult {
-    guard_result(|| Ok(Engine::from_filter_set(*filter_set)))
+    Ok::<_, InternalError>(Engine::from_filter_set(*filter_set)).into()
 }
 
 /// Native metadata parse, exercised by the crate tests.
@@ -238,5 +233,5 @@ pub fn read_list_metadata_bytes(list: &[u8]) -> FilterListMetadata {
 }
 
 pub fn read_list_metadata(list: &CxxVector<u8>) -> FilterListMetadata {
-    guard(|| read_list_metadata_bytes(list.as_slice()))
+    read_list_metadata_bytes(list.as_slice())
 }
