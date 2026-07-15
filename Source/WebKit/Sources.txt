@@ -102,6 +102,8 @@ ModelProcess/ModelProcess.cpp
 ModelProcess/ModelConnectionToWebProcess.cpp
 ModelProcess/ModelProcessModelPlayerManagerProxy.cpp
 
+NetworkProcess/AdBlock/AdBlockEngine.cpp
+NetworkProcess/AdBlock/AdBlockManager.cpp
 NetworkProcess/BackgroundFetchLoad.cpp @cost:4
 NetworkProcess/DatabaseUtilities.cpp @cost:3
 NetworkProcess/NetworkActivityTracker.cpp

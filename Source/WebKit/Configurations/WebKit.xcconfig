@@ -89,8 +89,17 @@ SWIFT_OPTIMIZATION_LEVEL[config=Debug] = -O;
 // tools) that share BaseTarget but never build the archive. Mirrors the
 // libwebrtc link pattern above. ENABLE_ADBLOCK is defined in BaseTarget.xcconfig
 // (included above), so it is in scope here.
+// -no_compact_unwind: libwebkitadblock.a bundles the prebuilt Rust std, which is
+// compiled with unwinding and so carries _rust_eh_personality. WebKit.framework
+// already links Swift + C++ + Objective-C exception personalities; a fourth
+// (Rust) overflows macOS's 3-personality compact-unwind encoding limit at link
+// time. (panic=abort in the crate drops our own code's landing pads but not
+// std's; fully dropping them would require building std from source with
+// panic=abort, i.e. a nightly toolchain, as Chromium does.) Falling back to
+// DWARF unwind info for this framework sidesteps the compact-unwind limit; it is
+// scoped to adblock-enabled builds, so the flag-off build is unaffected.
 WK_ADBLOCK_LDFLAGS = $(WK_ADBLOCK_LDFLAGS_$(ENABLE_ADBLOCK));
-WK_ADBLOCK_LDFLAGS_1 = -lwebkitadblock;
+WK_ADBLOCK_LDFLAGS_1 = -lwebkitadblock -Wl,-no_compact_unwind;
 WK_ADBLOCK_LIBRARY_SEARCH_PATHS = $(WK_ADBLOCK_LIBRARY_SEARCH_PATHS_$(ENABLE_ADBLOCK));
 WK_ADBLOCK_LIBRARY_SEARCH_PATHS_1 = "$(BUILT_PRODUCTS_DIR)";
 

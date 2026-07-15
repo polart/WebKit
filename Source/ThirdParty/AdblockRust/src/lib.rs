@@ -10,9 +10,11 @@
 //! `rs` crate, minus the Chromium-specific domain-resolver callback (we use
 //! adblock-rust's `embedded-domain-resolver` feature instead).
 //!
-//! Every fallible entry point returns a result struct rather than throwing, and
-//! every FFI boundary function catches panics and degrades to a safe default
-//! (KTD7: never crash the NetworkProcess because a filter list was bad).
+//! Every fallible entry point returns a result struct rather than throwing. The
+//! crate is compiled with panic=abort (see Cargo.toml), matching Chromium/Brave:
+//! adblock-rust is panic-free on untrusted filter lists, so the FFI does not
+//! catch panics — a genuine panic aborts rather than unwinding across the
+//! boundary (KTD7, revised to match the production reference).
 
 mod convert;
 mod engine;
@@ -137,7 +139,6 @@ mod ffi {
         JsonError,
         Utf8Error,
         AdblockError,
-        PanicError,
     }
 
     // cxx does not support generics, so each fallible call returns a bespoke
