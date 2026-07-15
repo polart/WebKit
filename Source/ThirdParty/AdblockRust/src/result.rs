@@ -18,8 +18,6 @@ pub enum InternalError {
     Utf8(#[from] Utf8Error),
     #[error("deserialization error: {0}")]
     Deserialize(String),
-    #[error("panic at FFI boundary: {0}")]
-    Panic(String),
 }
 
 impl From<&InternalError> for ResultKind {
@@ -28,7 +26,6 @@ impl From<&InternalError> for ResultKind {
             InternalError::Json(_) => Self::JsonError,
             InternalError::Utf8(_) => Self::Utf8Error,
             InternalError::Deserialize(_) => Self::AdblockError,
-            InternalError::Panic(_) => Self::PanicError,
         }
     }
 }
