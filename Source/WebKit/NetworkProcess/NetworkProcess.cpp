@@ -187,6 +187,9 @@ NetworkProcess::NetworkProcess()
 #if ENABLE(CONTENT_EXTENSIONS)
     , m_networkContentRuleListManager(*this)
 #endif
+#if ENABLE(ADBLOCK)
+    , m_adBlockManager(AdBlockManager::create())
+#endif
 #if USE(RUNNINGBOARD)
     , m_webSQLiteDatabaseTracker(WebSQLiteDatabaseTracker::create([weakThis = WeakPtr { *this }](bool isHoldingLockedFiles) {
         if (RefPtr protectedThis = weakThis.get())

@@ -26,6 +26,9 @@
 #include "config.h"
 #include "NetworkLoadChecker.h"
 
+#if ENABLE(ADBLOCK)
+#include "AdBlock/AdBlockRequestCheck.h"
+#endif
 #include "Download.h"
 #include "Logging.h"
 #include "NetworkCORSPreflightChecker.h"
@@ -334,7 +337,31 @@ auto NetworkLoadChecker::accessControlErrorForValidationHandler(String&& message
     return ResourceError { String { }, 0, m_url, WTF::move(message), ResourceError::Type::AccessControl };
 }
 
+#if ENABLE(ADBLOCK)
 void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurityPolicyClient* client, ValidationHandler&& handler)
+{
+    // Surgical U4 hook: consult the adblock engine (subresources, subframes, and
+    // redirect re-entry all flow through here) before the existing CSP/content-
+    // extension path. A block ends the load the same way a content-extension
+    // block does.
+    AdBlock::checkNetworkRequest(m_networkProcess, m_topOrigin.get(), m_options.destination, m_requestLoadType == LoadType::MainFrame, request, [weakThis = WeakPtr { *this }, request = WTF::move(request), client, handler = WTF::move(handler)](bool blocked) mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis) {
+            handler(ResourceError { ResourceError::Type::Cancellation });
+            return;
+        }
+        if (blocked) {
+            handler(protectedThis->accessControlErrorForValidationHandler("Blocked by adblock"_s));
+            return;
+        }
+        protectedThis->checkRequestAfterAdBlock(WTF::move(request), client, WTF::move(handler));
+    });
+}
+
+void NetworkLoadChecker::checkRequestAfterAdBlock(ResourceRequest&& request, ContentSecurityPolicyClient* client, ValidationHandler&& handler)
+#else
+void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurityPolicyClient* client, ValidationHandler&& handler)
+#endif
 {
     ResourceRequest originalRequest = request;
 

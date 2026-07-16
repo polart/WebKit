@@ -135,6 +135,11 @@ private:
     bool isRedirected() const { return m_redirectCount; }
 
     void checkRequest(WebCore::ResourceRequest&&, WebCore::ContentSecurityPolicyClient*, ValidationHandler&&);
+#if ENABLE(ADBLOCK)
+    // The CSP/content-extension continuation of checkRequest, run once the adblock
+    // engine has allowed the request.
+    void checkRequestAfterAdBlock(WebCore::ResourceRequest&&, WebCore::ContentSecurityPolicyClient*, ValidationHandler&&);
+#endif
 
     bool isAllowedByContentSecurityPolicy(const WebCore::ResourceRequest&, WebCore::ContentSecurityPolicyClient*);
 
