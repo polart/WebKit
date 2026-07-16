@@ -26,6 +26,9 @@
 #include "config.h"
 #include "NetworkSocketChannel.h"
 
+#if ENABLE(ADBLOCK)
+#include "AdBlock/AdBlockRequestCheck.h"
+#endif
 #include "MessageSenderInlines.h"
 #include "NetworkConnectionToWebProcess.h"
 #include "NetworkProcess.h"
@@ -68,7 +71,21 @@ NetworkSocketChannel::NetworkSocketChannel(NetworkConnectionToWebProcess& connec
 #if PLATFORM(COCOA)
         session->addWebSocketTask(webPageProxyID, *socket);
 #endif
+#if ENABLE(ADBLOCK)
+        // U4 hook: block the handshake if the socket URL matches a filter rule.
+        // Resume is deferred until the async check completes so a matched host is
+        // refused before the connection opens.
+        AdBlock::checkWebSocketRequest(connection.networkProcess(), clientOrigin.topOrigin, request, [protectedThis = Ref { *this }](bool blocked) {
+            if (blocked) {
+                protectedThis->didClose(0, "Blocked by adblock"_s);
+                return;
+            }
+            if (RefPtr socket = protectedThis->m_socket.get())
+                socket->resume();
+        });
+#else
         socket->resume();
+#endif
     }
 }
 

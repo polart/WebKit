@@ -69,6 +69,10 @@
 #include <wtf/WeakPtr.h>
 #include <wtf/text/ASCIILiteral.h>
 
+#if ENABLE(ADBLOCK)
+#include "AdBlock/AdBlockManager.h"
+#endif
+
 #if USE(RUNNINGBOARD)
 #include "WebSQLiteDatabaseTracker.h"
 #endif
@@ -359,6 +363,10 @@ public:
     NetworkContentRuleListManager& networkContentRuleListManager() LIFETIME_BOUND { return m_networkContentRuleListManager; }
 #endif
 
+#if ENABLE(ADBLOCK)
+    AdBlockManager& adBlockManager() LIFETIME_BOUND { return m_adBlockManager; }
+#endif
+
     void syncLocalStorage(CompletionHandler<void()>&&);
     void storeServiceWorkerRegistrations(PAL::SessionID, CompletionHandler<void()>&&);
 
@@ -536,7 +544,7 @@ private:
     void platformTerminate();
 
     void lowMemoryHandler(Critical);
-    
+
     // AuxiliaryProcess
     void initializeProcess(const AuxiliaryProcessInitializationParameters&) override;
     void initializeProcessName(const AuxiliaryProcessInitializationParameters&) override;
@@ -605,7 +613,7 @@ private:
     void clearProxyConfigData(PAL::SessionID);
     void setProxyConfigData(PAL::SessionID, Vector<std::pair<Vector<uint8_t>, std::optional<WTF::UUID>>>&& proxyConfigurations);
 #endif
-    
+
 #if USE(SOUP)
     void setIgnoreTLSErrors(PAL::SessionID, bool);
     void userPreferredLanguagesChanged(const Vector<String>&);
@@ -624,7 +632,7 @@ private:
     void terminateRemoteWorkerContextConnectionWhenPossible(RemoteWorkerType, PAL::SessionID, const WebCore::RegistrableDomain&, WebCore::ProcessIdentifier);
     void runningOrTerminatingServiceWorkerCountForTesting(PAL::SessionID, CompletionHandler<void(unsigned)>&&) const;
     void platformFlushCookies(PAL::SessionID, CompletionHandler<void()>&&);
-    
+
     void registerURLSchemeAsSecure(const String&) const;
     void registerURLSchemeAsBypassingContentSecurityPolicy(const String&) const;
     void registerURLSchemeAsLocal(const String&) const;
@@ -689,11 +697,15 @@ private:
     NetworkContentRuleListManager m_networkContentRuleListManager;
 #endif
 
+#if ENABLE(ADBLOCK)
+    const Ref<AdBlockManager> m_adBlockManager;
+#endif
+
 #if USE(RUNNINGBOARD)
     const Ref<WebSQLiteDatabaseTracker> m_webSQLiteDatabaseTracker;
     RefPtr<ProcessAssertion> m_holdingLockedFileAssertion;
 #endif
-    
+
 #if ENABLE(WEB_RTC)
     const RefPtr<RTCDataChannelRemoteManagerProxy> m_rtcDataChannelProxy;
 #endif
