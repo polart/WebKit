@@ -29,44 +29,44 @@ namespace WebKit {
 
 class AdBlockManager : public ThreadSafeRefCounted<AdBlockManager> {
 public:
-    WTF_EXPORT_PRIVATE static Ref<AdBlockManager> create();
-    WTF_EXPORT_PRIVATE ~AdBlockManager();
+    static Ref<AdBlockManager> create();
+    ~AdBlockManager();
 
     // Engine lifecycle (all applied on the work queue; the swap is atomic).
-    WTF_EXPORT_PRIVATE void setEngine(Ref<AdBlockEngine>&&);
-    WTF_EXPORT_PRIVATE void setEngineFromRules(Vector<uint8_t>&&, CompletionHandler<void()>&& = [] { });
+    void setEngine(Ref<AdBlockEngine>&&);
+    void setEngineFromRules(Vector<uint8_t>&&, CompletionHandler<void()>&& = [] { });
 
     // Loads a versioned `.dat` cache. completion(false) if the file is missing,
     // too large, corrupt, or from an incompatible engine version, so the caller
     // can fall back to re-parsing source lists (KTD7). On success the restored
     // engine is swapped in.
-    WTF_EXPORT_PRIVATE void loadCacheFile(const String& path, CompletionHandler<void(bool)>&&);
+    void loadCacheFile(const String& path, CompletionHandler<void(bool)>&&);
     // Serializes the current engine to a versioned `.dat` cache. completion(false)
     // if there is no engine yet or the write fails.
-    WTF_EXPORT_PRIVATE void saveCacheFile(const String& path, CompletionHandler<void(bool)>&&);
+    void saveCacheFile(const String& path, CompletionHandler<void(bool)>&&);
 
     // Per-site allowlist (KTD8). Mutated and queried from the caller thread.
-    WTF_EXPORT_PRIVATE void setAllowlistedHosts(HashSet<String>&&);
-    WTF_EXPORT_PRIVATE void addAllowlistedHost(const String&);
-    WTF_EXPORT_PRIVATE void removeAllowlistedHost(const String&);
-    WTF_EXPORT_PRIVATE bool isAllowlistedHost(const String&) const;
+    void setAllowlistedHosts(HashSet<String>&&);
+    void addAllowlistedHost(const String&);
+    void removeAllowlistedHost(const String&);
+    bool isAllowlistedHost(const String&) const;
 
     // Async queries. Each is invoked on and completed on the main run loop.
     // Before any list has loaded, or for an allowlisted host, they complete with
     // the pass-through default without touching the engine.
-    WTF_EXPORT_PRIVATE void checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(AdBlockEngine::CheckResult)>&&);
-    WTF_EXPORT_PRIVATE void cspDirectives(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String)>&&);
-    WTF_EXPORT_PRIVATE void cosmeticResourcesJSON(const String& url, const String& hostname, CompletionHandler<void(String)>&&);
-    WTF_EXPORT_PRIVATE void hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& hostname, CompletionHandler<void(Vector<String>)>&&);
+    void checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(AdBlockEngine::CheckResult)>&&);
+    void cspDirectives(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String)>&&);
+    void cosmeticResourcesJSON(const String& url, const String& hostname, CompletionHandler<void(String)>&&);
+    void hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& hostname, CompletionHandler<void(Vector<String>)>&&);
 
     // Number of queries that actually reached the engine. A test hook: an
     // allowlisted host or a query issued before any list loaded never increments
     // it. Thread-safe.
-    WTF_EXPORT_PRIVATE uint64_t engineQueryCount() const { return m_engineQueryCount.load(std::memory_order_relaxed); }
+    uint64_t engineQueryCount() const { return m_engineQueryCount.load(std::memory_order_relaxed); }
 
     // On-disk cache format helper, exposed for tests: prepends the magic +
     // version header the loader validates.
-    WTF_EXPORT_PRIVATE static Vector<uint8_t> encodeCache(std::span<const uint8_t> payload);
+    static Vector<uint8_t> encodeCache(std::span<const uint8_t> payload);
 
 private:
     AdBlockManager();

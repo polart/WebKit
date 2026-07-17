@@ -36,24 +36,24 @@ public:
 
     // An empty, pass-through engine (matches nothing) — the safe default before
     // any filter list has loaded.
-    WTF_EXPORT_PRIVATE static Ref<AdBlockEngine> create();
+    static Ref<AdBlockEngine> create();
     // Compiles a single ABP filter list; a malformed list degrades to an empty
     // engine rather than failing (KTD7).
-    WTF_EXPORT_PRIVATE static Ref<AdBlockEngine> createFromRules(std::span<const uint8_t> filterListText);
+    static Ref<AdBlockEngine> createFromRules(std::span<const uint8_t> filterListText);
     // Restores an engine from an adblock-rust `.dat` payload. Returns nullptr if
     // the payload is recoverably corrupt or from an incompatible engine version,
     // so the caller can fall back to re-parsing source lists. Note: under
     // panic=abort (KTD7) a payload that trips a panic inside adblock-rust aborts
     // the process rather than returning nullptr.
-    WTF_EXPORT_PRIVATE static RefPtr<AdBlockEngine> createFromSerializedPayload(std::span<const uint8_t> serialized);
+    static RefPtr<AdBlockEngine> createFromSerializedPayload(std::span<const uint8_t> serialized);
 
-    WTF_EXPORT_PRIVATE ~AdBlockEngine();
+    ~AdBlockEngine();
 
-    WTF_EXPORT_PRIVATE CheckResult checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty) const;
-    WTF_EXPORT_PRIVATE String cspDirectives(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty) const;
-    WTF_EXPORT_PRIVATE String cosmeticResourcesJSON(const String& url) const;
-    WTF_EXPORT_PRIVATE Vector<String> hiddenClassIdSelectors(const Vector<String>& classes, const Vector<String>& ids, const Vector<String>& exceptions) const;
-    WTF_EXPORT_PRIVATE Vector<uint8_t> serialize() const;
+    CheckResult checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty) const;
+    String cspDirectives(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty) const;
+    String cosmeticResourcesJSON(const String& url) const;
+    Vector<String> hiddenClassIdSelectors(const Vector<String>& classes, const Vector<String>& ids, const Vector<String>& exceptions) const;
+    Vector<uint8_t> serialize() const;
 
 private:
     explicit AdBlockEngine(std::unique_ptr<AdBlockEngineHolder>&&);
