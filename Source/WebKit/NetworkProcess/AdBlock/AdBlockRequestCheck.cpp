@@ -71,21 +71,23 @@ static bool isBlockingResult(const AdBlockEngine::CheckResult& result)
     return result.isMatched && !result.hasException;
 }
 
-void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrigin, FetchOptionsDestination destination, bool isMainFrameLoad, const ResourceRequest& request, CompletionHandler<void(bool)>&& completion)
+void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrigin, FetchOptionsDestination destination, bool isMainFrameLoad, ResourceRequest&& request, CompletionHandler<void(ResourceRequest&&, bool)>&& completion)
 {
     // Never cancel the top-level navigation itself; only its subresources and
     // subframes are subject to blocking.
     if (isMainFrameLoad) {
-        completion(false);
+        completion(WTF::move(request), false);
         return;
     }
 
+    // Read every query input into locals before the request is moved into the
+    // async continuation, so the engine query never touches a moved-from request.
     auto url = request.url();
     String sourceHostname = topOrigin ? topOrigin->host() : String { };
     bool isThirdParty = topOrigin && !RegistrableDomain(url).matches(topOrigin->data());
 
-    networkProcess.adBlockManager().checkRequest(url.string(), url.host().toString(), sourceHostname, requestTypeForDestination(destination), isThirdParty, [completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
-        completion(isBlockingResult(result));
+    networkProcess.adBlockManager().checkRequest(url.string(), url.host().toString(), sourceHostname, requestTypeForDestination(destination), isThirdParty, [request = WTF::move(request), completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
+        completion(WTF::move(request), isBlockingResult(result));
     });
 }
 

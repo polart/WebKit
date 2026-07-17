@@ -344,7 +344,7 @@ void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurity
     // redirect re-entry all flow through here) before the existing CSP/content-
     // extension path. A block ends the load the same way a content-extension
     // block does.
-    AdBlock::checkNetworkRequest(m_networkProcess, m_topOrigin.get(), m_options.destination, m_requestLoadType == LoadType::MainFrame, request, [weakThis = WeakPtr { *this }, request = WTF::move(request), client, handler = WTF::move(handler)](bool blocked) mutable {
+    AdBlock::checkNetworkRequest(m_networkProcess, m_topOrigin.get(), m_options.destination, m_requestLoadType == LoadType::MainFrame, WTF::move(request), [weakThis = WeakPtr { *this }, client, handler = WTF::move(handler)](ResourceRequest&& request, bool blocked) mutable {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis) {
             handler(ResourceError { ResourceError::Type::Cancellation });
