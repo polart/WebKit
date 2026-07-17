@@ -584,6 +584,18 @@ void WebLocalFrameLoaderClient::dispatchDidStartProvisionalLoad()
     if (!webPage)
         return;
 
+#if ENABLE(ADBLOCK)
+    // A new navigation supersedes any scriptlet stashed for this frame's previous
+    // load, which may not have committed (e.g. a 204, download, or cancelled load
+    // never reaches the window-object setup that consumes it). Drop it now — before
+    // this navigation's response stashes its own — so a scriptlet matched for one
+    // document can never run on a later, unrelated one.
+    if (auto* adBlockPageAgent = webPage->adBlockPageAgentIfExists()) {
+        if (RefPtr coreLocalFrame = m_frame->coreLocalFrame())
+            adBlockPageAgent->clearPendingScriptlet(coreLocalFrame->frameID());
+    }
+#endif
+
 #if ENABLE(FULLSCREEN_API)
     RefPtr document = m_localFrame->document();
     if (document && protect(document->fullscreen())->fullscreenElement()) {
