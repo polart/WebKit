@@ -441,3 +441,15 @@ Layout tests are not the primary vehicle here (behavior is fork-specific, not we
 - **xcconfig linking site unconfirmed for both processes** — U2 (P2, feasibility, confidence 75)
 
   The plan links the static library via `BaseTarget.xcconfig` citing the libwebrtc precedent, but libwebrtc links through WebCore's xcconfig, and it is unverified that `BaseTarget.xcconfig` actually feeds both the NetworkProcess and WebProcess targets. Confirm the include chain covers both targets and name the concrete `OTHER_LDFLAGS` / `LIBRARY_SEARCH_PATHS` lines, or identify the exact xcconfig subset to edit.
+
+### From 2026-07-17 U5 review
+
+Review of the U5 CSP hook (commit `5cbfac5d6ddf`). Two findings were fixed in-branch: the missing CSP directive-name allow-list (`report-uri`/`report-to` now rejected at `mergeCSPDirectives`, commit `a2a62b4`) and cache/304 CSP inconsistency (injection moved to serve time on both paths, commit `ad7a46e`). The two below remain open follow-ups.
+
+- **Every document/subdocument navigation pays a WorkQueue round-trip even with zero lists loaded** — U5/U3 (P2, performance, confidence 75)
+
+  Before U5, a main-frame load completed synchronously inline; U5 routes it through `AdBlockManager::cspDirectives`, which always dispatches to the engine WorkQueue and back via two `RunLoop` hops — on navigation start, the most latency-sensitive path, for every top-level load whether or not any filter list exists. Add a fast path that returns empty on the calling thread when no engine is loaded. Note the fix is not a bare null check: `m_engine` is mutated only on the WorkQueue, so reading it on the main thread is a data race — gate the fast path on a separate `std::atomic<bool>` "lists loaded" flag set on the queue. The same fast path also benefits U4's per-subresource block check.
+
+- **`mergeCSPDirectives`/`containsForbiddenCSPDirective` are pure functions testable now but swept into the U10 deferral** — U5 (P2, testing, confidence 75)
+
+  The plan defers U5's `AdBlockCSP.mm` API test to U10 because the async engine round-trip only becomes observable end-to-end via the embedder API. That rationale does not apply to `mergeCSPDirectives(ResourceResponse&, const String&)` and `containsForbiddenCSPDirective(const String&)`, which take no `WKWebView`/embedder dependency — exactly the security-sensitive logic (control-character rejection, `report-uri`/`report-to` allow-list, existing-header comma-join) most likely to regress silently through U6–U9. Add a small C++ unit test in the style of `Tools/TestWebKitAPI/Tests/WebCore/*` covering these now, independent of the U10 Swift suite. (Weigh against the U3/U4 decision to consolidate adblock tests on Swift Testing at U10; this is a scoped exception for a pure, self-contained function, not a return to interim C++ coverage broadly.)
