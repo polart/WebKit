@@ -333,6 +333,10 @@ private:
     void removeSyntheticParkedLoaderForTesting(NetworkResourceLoadIdentifier, CompletionHandler<void()>&&);
 #endif
 
+#if ENABLE(ADBLOCK)
+    void hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>)>&&);
+#endif
+
     void removeLoadIdentifier(WebCore::ResourceLoaderIdentifier);
     void pageLoadCompleted(WebCore::PageIdentifier);
     void browsingContextRemoved(WebPageProxyIdentifier, WebCore::PageIdentifier, WebCore::FrameIdentifier);
@@ -564,6 +568,13 @@ private:
 #endif
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
     HashSet<String> m_hostsWithCookieListeners;
+#endif
+#if ENABLE(ADBLOCK)
+    // Sliding-window token budget for U8 dynamic-hiding queries, so a hostile or
+    // runaway web process cannot spam unique tokens to overload the shared engine.
+    MonotonicTime m_adBlockDynamicWindowStart;
+    unsigned m_adBlockDynamicTokensInWindow { 0 };
+    bool m_adBlockDynamicWindowLogged { false };
 #endif
 
     bool m_captureExtraNetworkLoadMetricsEnabled { false };
