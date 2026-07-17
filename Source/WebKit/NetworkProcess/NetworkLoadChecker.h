@@ -128,6 +128,16 @@ public:
     bool isSameOriginRequest() const { return m_isSameOriginRequest; }
     NODELETE bool crossOriginEmbedderPolicyAllowsCredentials() const;
 
+#if ENABLE(ADBLOCK)
+    // Engine CSP directives fetched during the request check for a document/
+    // subdocument load, injected into the response delivered to the web
+    // process on both the network (didReceiveResponse) and cache-serve
+    // (didRetrieveCacheEntry) paths — never into the cached entry itself, so a
+    // cache hit reflects the current engine verdict. Empty for non-document
+    // loads, allowlisted hosts, and pass-through.
+    const String& adBlockCSPDirectives() const LIFETIME_BOUND { return m_adBlockCSPDirectives; }
+#endif
+
 private:
     NetworkLoadChecker(NetworkResourceLoader*, NetworkSchemeRegistry*, WebCore::FetchOptions&&, PAL::SessionID, std::optional<WebPageProxyIdentifier>, WebCore::HTTPHeaderMap&&, URL&&, DocumentURL&&,  RefPtr<WebCore::SecurityOrigin>&&, RefPtr<WebCore::SecurityOrigin>&& topOrigin, RefPtr<WebCore::SecurityOrigin>&& parentOrigin, WebCore::PreflightPolicy, String&& referrer, bool allowPrivacyProxy, OptionSet<WebCore::AdvancedPrivacyProtections>, bool shouldCaptureExtraNetworkLoadMetrics, LoadType requestLoadType);
 
@@ -208,6 +218,10 @@ private:
     bool m_shouldCaptureExtraNetworkLoadMetrics { false };
 
     WebCore::NetworkLoadInformation m_loadInformation;
+
+#if ENABLE(ADBLOCK)
+    String m_adBlockCSPDirectives;
+#endif
 
     LoadType m_requestLoadType;
     const RefPtr<NetworkSchemeRegistry> m_schemeRegistry;

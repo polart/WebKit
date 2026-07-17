@@ -84,6 +84,7 @@ extern "C" {
 #define WEBKIT2_LOG_CHANNELS(M) \
     M(API) \
     M(ActivityState) \
+    M(AdBlock) \
     M(AdvancedPrivacyProtections) \
     M(AppSSO) \
     M(Animations) \
