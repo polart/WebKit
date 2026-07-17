@@ -8,6 +8,7 @@
 
 #if ENABLE(ADBLOCK)
 
+#include "Logging.h"
 #include <algorithm>
 #include <array>
 #include <wtf/Assertions.h>
@@ -28,7 +29,9 @@ static constexpr size_t maxCacheFileSize = 256 * MB;
 
 static Vector<String> isolatedCopyStrings(const Vector<String>& strings)
 {
-    return strings.map([](auto& string) { return string.isolatedCopy(); });
+    return strings.map([](auto& string) {
+        return string.isolatedCopy();
+    });
 }
 
 Ref<AdBlockManager> AdBlockManager::create()
@@ -72,33 +75,33 @@ bool AdBlockManager::loadCacheOnQueue(const String& path)
 {
     auto size = FileSystem::fileSize(path);
     if (!size || *size < cacheHeaderSize || *size > maxCacheFileSize) {
-        WTFLogAlways("AdBlockManager: cache file missing or size out of bounds; re-parsing source lists");
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: cache file missing or size out of bounds; re-parsing source lists");
         return false;
     }
 
     auto contents = FileSystem::readEntireFile(path);
     if (!contents) {
-        WTFLogAlways("AdBlockManager: cache file could not be read; re-parsing source lists");
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: cache file could not be read; re-parsing source lists");
         return false;
     }
 
     auto bytes = contents->span();
     if (bytes.size() < cacheHeaderSize || bytes.size() > maxCacheFileSize) {
-        WTFLogAlways("AdBlockManager: cache file size out of bounds after read; re-parsing source lists");
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: cache file size out of bounds after read; re-parsing source lists");
         return false;
     }
     if (!std::equal(cacheMagic.begin(), cacheMagic.end(), bytes.begin())) {
-        WTFLogAlways("AdBlockManager: cache file magic mismatch; re-parsing source lists");
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: cache file magic mismatch; re-parsing source lists");
         return false;
     }
     if (bytes[cacheMagic.size()] != cacheFormatVersion) {
-        WTFLogAlways("AdBlockManager: cache format version mismatch; re-parsing source lists");
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: cache format version mismatch; re-parsing source lists");
         return false;
     }
 
     auto engine = AdBlockEngine::createFromSerializedPayload(bytes.subspan(cacheHeaderSize));
     if (!engine) {
-        WTFLogAlways("AdBlockManager: cache payload failed to deserialize; re-parsing source lists");
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: cache payload failed to deserialize; re-parsing source lists");
         return false;
     }
 
@@ -124,7 +127,7 @@ void AdBlockManager::saveCacheFile(const String& path, CompletionHandler<void(bo
             auto encoded = encodeCache(engine->serialize().span());
             didSave = FileSystem::overwriteEntireFile(path, encoded.span()).has_value();
             if (!didSave)
-                WTFLogAlways("AdBlockManager: failed to write cache file");
+                RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: failed to write cache file");
         }
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), didSave]() mutable {
             completion(didSave);
