@@ -10,10 +10,13 @@
 
 #include "AdBlockManager.h"
 #include "NetworkProcess.h"
+#include <WebCore/HTTPHeaderNames.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/ResourceRequest.h>
+#include <WebCore/ResourceResponse.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebKit {
 
@@ -71,24 +74,80 @@ static bool isBlockingResult(const AdBlockEngine::CheckResult& result)
     return result.isMatched && !result.hasException;
 }
 
-void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrigin, FetchOptionsDestination destination, bool isMainFrameLoad, ResourceRequest&& request, CompletionHandler<void(ResourceRequest&&, bool)>&& completion)
+// A $csp rule only applies to a document or subdocument (frame) load, mirroring
+// where a Content-Security-Policy header would land. Other destinations skip the
+// CSP query entirely.
+static bool isDocumentDestination(FetchOptionsDestination destination)
 {
+    return destination == FetchOptionsDestination::Document || destination == FetchOptionsDestination::Iframe;
+}
+
+static bool containsControlCharacters(const String& value)
+{
+    for (unsigned i = 0; i < value.length(); ++i) {
+        if (value[i] < 0x20 || value[i] == 0x7F)
+            return true;
+    }
+    return false;
+}
+
+void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrigin, FetchOptionsDestination destination, bool isMainFrameLoad, ResourceRequest&& request, CompletionHandler<void(ResourceRequest&&, bool, String)>&& completion)
+{
+    // Read every query input into locals before the request is moved into an
+    // async continuation, so the engine queries never touch a moved-from request.
+    auto url = request.url();
+    auto urlString = url.string();
+    auto hostname = url.host().toString();
+    auto requestType = requestTypeForDestination(destination);
+    // For a main-frame document the tab origin is the document itself: source
+    // host is self and the load is first-party.
+    String sourceHostname = topOrigin ? topOrigin->host() : (isMainFrameLoad ? hostname : String { });
+    bool isThirdParty = topOrigin && !RegistrableDomain(url).matches(topOrigin->data());
+    bool wantsCSP = isDocumentDestination(destination);
+
+    Ref manager { networkProcess.adBlockManager() };
+
+    // Fetches the navigation's CSP directives (document/subdocument only) after a
+    // request has been allowed, then completes. Never runs for a blocked request.
+    auto finish = [manager, urlString, hostname, sourceHostname, requestType, isThirdParty, wantsCSP](ResourceRequest&& request, bool blocked, CompletionHandler<void(ResourceRequest&&, bool, String)>&& completion) mutable {
+        if (blocked || !wantsCSP) {
+            completion(WTF::move(request), blocked, String { });
+            return;
+        }
+        manager->cspDirectives(urlString, hostname, sourceHostname, requestType, isThirdParty, [request = WTF::move(request), completion = WTF::move(completion)](String csp) mutable {
+            completion(WTF::move(request), false, WTF::move(csp));
+        });
+    };
+
     // Never cancel the top-level navigation itself; only its subresources and
-    // subframes are subject to blocking.
+    // subframes are subject to blocking. A main-frame load still queries CSP.
     if (isMainFrameLoad) {
-        completion(WTF::move(request), false);
+        finish(WTF::move(request), false, WTF::move(completion));
         return;
     }
 
-    // Read every query input into locals before the request is moved into the
-    // async continuation, so the engine query never touches a moved-from request.
-    auto url = request.url();
-    String sourceHostname = topOrigin ? topOrigin->host() : String { };
-    bool isThirdParty = topOrigin && !RegistrableDomain(url).matches(topOrigin->data());
-
-    networkProcess.adBlockManager().checkRequest(url.string(), url.host().toString(), sourceHostname, requestTypeForDestination(destination), isThirdParty, [request = WTF::move(request), completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
-        completion(WTF::move(request), isBlockingResult(result));
+    manager->checkRequest(urlString, hostname, sourceHostname, requestType, isThirdParty, [finish = WTF::move(finish), request = WTF::move(request), completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
+        finish(WTF::move(request), isBlockingResult(result), WTF::move(completion));
     });
+}
+
+void mergeCSPDirectives(ResourceResponse& response, const String& cspDirectives)
+{
+    // Reject empty or control-character-bearing directives before injection: a
+    // newline or null from a hostile filter list could otherwise forge or split
+    // response headers (U5 security requirement).
+    if (cspDirectives.isEmpty() || containsControlCharacters(cspDirectives))
+        return;
+
+    auto existing = response.httpHeaderField(HTTPHeaderName::ContentSecurityPolicy);
+    if (existing.isEmpty()) {
+        response.setHTTPHeaderField(HTTPHeaderName::ContentSecurityPolicy, cspDirectives);
+        return;
+    }
+    // Distinct policies are enforced independently; comma-join them per CSP2
+    // (https://www.w3.org/TR/CSP2/#implementation-considerations), matching
+    // Brave's MergeCspDirectiveInto.
+    response.setHTTPHeaderField(HTTPHeaderName::ContentSecurityPolicy, makeString(cspDirectives, ", "_s, existing));
 }
 
 void checkWebSocketRequest(NetworkProcess& networkProcess, const SecurityOriginData& topOrigin, const ResourceRequest& request, CompletionHandler<void(bool)>&& completion)

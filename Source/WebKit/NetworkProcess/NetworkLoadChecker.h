@@ -128,6 +128,13 @@ public:
     bool navigationTAOCheckPassed() const { return m_navigationTAOCheckPassed; }
     bool isSameOriginRequest() const { return m_isSameOriginRequest; }
 
+#if ENABLE(ADBLOCK)
+    // Engine CSP directives fetched during the request check for a document/
+    // subdocument load (U5), applied to the response in didReceiveResponse. Empty
+    // for non-document loads, allowlisted hosts, and pass-through.
+    const String& adBlockCSPDirectives() const LIFETIME_BOUND { return m_adBlockCSPDirectives; }
+#endif
+
 private:
     NetworkLoadChecker(NetworkProcess&, NetworkResourceLoader*, NetworkSchemeRegistry*, WebCore::FetchOptions&&, PAL::SessionID, std::optional<WebPageProxyIdentifier>, WebCore::HTTPHeaderMap&&, URL&&, DocumentURL&&,  RefPtr<WebCore::SecurityOrigin>&&, RefPtr<WebCore::SecurityOrigin>&& topOrigin, RefPtr<WebCore::SecurityOrigin>&& parentOrigin, WebCore::PreflightPolicy, String&& referrer, bool allowPrivacyProxy, OptionSet<WebCore::AdvancedPrivacyProtections>, bool shouldCaptureExtraNetworkLoadMetrics, LoadType requestLoadType);
 
@@ -209,6 +216,10 @@ private:
     bool m_shouldCaptureExtraNetworkLoadMetrics { false };
 
     WebCore::NetworkLoadInformation m_loadInformation;
+
+#if ENABLE(ADBLOCK)
+    String m_adBlockCSPDirectives;
+#endif
 
     LoadType m_requestLoadType;
     const RefPtr<NetworkSchemeRegistry> m_schemeRegistry;
