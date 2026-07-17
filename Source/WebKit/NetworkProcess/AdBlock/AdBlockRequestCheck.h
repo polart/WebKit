@@ -49,10 +49,12 @@ ASCIILiteral requestTypeForDestination(WebCore::FetchOptionsDestination);
 void checkNetworkRequest(NetworkProcess&, WebCore::SecurityOrigin* topOrigin, WebCore::FetchOptionsDestination, bool isMainFrameLoad, WebCore::ResourceRequest&&, CompletionHandler<void(WebCore::ResourceRequest&&, bool blocked, String cspDirectives)>&&);
 
 // Merges engine-supplied CSP directives into a document/subdocument response,
-// comma-joining with any existing Content-Security-Policy header per CSP2. A
-// no-op for empty directives or directives containing control characters
-// (newlines, nulls) — rejected before injection to block header injection from
-// a hostile filter list (U5 security requirement).
+// comma-joining with any existing Content-Security-Policy header per CSP2. The
+// whole injection is dropped (no-op) when the directives are empty, contain
+// control characters (newlines, nulls — header-injection defense), or carry an
+// abuse-only directive an untrusted list must not inject (report-uri/report-to,
+// the exfiltration channel — mirrors uBlock Origin's $csp restriction). All
+// rejected before injection (U5 security requirement).
 void mergeCSPDirectives(WebCore::ResourceResponse&, const String& cspDirectives);
 
 // Async WebSocket-open block check (request type "websocket"). completion(true)

@@ -16,7 +16,9 @@
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
+#include <wtf/ASCIICType.h>
 #include <wtf/text/MakeString.h>
+#include <wtf/text/StringView.h>
 
 namespace WebKit {
 
@@ -91,6 +93,40 @@ static bool containsControlCharacters(const String& value)
     return false;
 }
 
+// True if any CSP directive in the (possibly multi-policy) string is one an
+// untrusted filter list must not be allowed to inject. adblock-rust comma-joins
+// the matched $csp values and never validates their directive names, so this is
+// the only enforcement point — it mirrors uBlock Origin's $csp restriction.
+// report-uri/report-to are the exfiltration directives: they POST violation
+// reports (the document URL, referrer, and every blocked-resource URL) to an
+// endpoint the list controls, on every page the rule matches. frame-ancestors
+// and sandbox are intentionally permitted — filter lists use them legitimately
+// for anti-adblock, matching uBO.
+static bool containsForbiddenCSPDirective(const String& cspDirectives)
+{
+    StringView view { cspDirectives };
+    unsigned length = view.length();
+    unsigned i = 0;
+    while (i < length) {
+        // A directive name sits at the start of the string or right after a ','
+        // (policy separator) or ';' (directive separator); skip leading spaces.
+        while (i < length && isASCIIWhitespace(view[i]))
+            ++i;
+        unsigned nameStart = i;
+        while (i < length && view[i] != ';' && view[i] != ',' && !isASCIIWhitespace(view[i]))
+            ++i;
+        auto name = view.substring(nameStart, i - nameStart);
+        if (equalLettersIgnoringASCIICase(name, "report-uri"_s) || equalLettersIgnoringASCIICase(name, "report-to"_s))
+            return true;
+        // Skip this directive's value to the next ';'/',' boundary.
+        while (i < length && view[i] != ';' && view[i] != ',')
+            ++i;
+        if (i < length)
+            ++i;
+    }
+    return false;
+}
+
 void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrigin, FetchOptionsDestination destination, bool isMainFrameLoad, ResourceRequest&& request, CompletionHandler<void(ResourceRequest&&, bool, String)>&& completion)
 {
     // Read every query input into locals before the request is moved into an
@@ -137,6 +173,14 @@ void mergeCSPDirectives(ResourceResponse& response, const String& cspDirectives)
     // newline or null from a hostile filter list could otherwise forge or split
     // response headers (U5 security requirement).
     if (cspDirectives.isEmpty() || containsControlCharacters(cspDirectives))
+        return;
+
+    // Reject the whole injection if any policy carries an abuse-only directive
+    // (report-uri/report-to). We can't attribute a merged policy to the list that
+    // supplied it, so — consistent with the control-character posture above —
+    // drop all engine CSP for this response rather than inject a channel a
+    // hostile list could exfiltrate through.
+    if (containsForbiddenCSPDirective(cspDirectives))
         return;
 
     auto existing = response.httpHeaderField(HTTPHeaderName::ContentSecurityPolicy);
