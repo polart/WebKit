@@ -35,10 +35,12 @@ namespace AdBlock {
 // which the engine already treats as the catch-all type.
 ASCIILiteral requestTypeForDestination(WebCore::FetchOptionsDestination);
 
-// Async subresource/subframe block check. completion(true) => cancel the load.
-// Never blocks a top-level (main-frame) navigation. Pass-through — completion(false)
-// — when no list has loaded or the host is allowlisted (AdBlockManager decides).
-void checkNetworkRequest(NetworkProcess&, WebCore::SecurityOrigin* topOrigin, WebCore::FetchOptionsDestination, bool isMainFrameLoad, const WebCore::ResourceRequest&, CompletionHandler<void(bool blocked)>&&);
+// Async subresource/subframe block check. The request is moved in and handed
+// back to the completion, so a single move covers both the engine query and the
+// caller's continuation (blocked == true => cancel the load). Never blocks a
+// top-level (main-frame) navigation. Pass-through — blocked == false — when no
+// list has loaded or the host is allowlisted (AdBlockManager decides).
+void checkNetworkRequest(NetworkProcess&, WebCore::SecurityOrigin* topOrigin, WebCore::FetchOptionsDestination, bool isMainFrameLoad, WebCore::ResourceRequest&&, CompletionHandler<void(WebCore::ResourceRequest&&, bool blocked)>&&);
 
 // Async WebSocket-open block check (request type "websocket"). completion(true)
 // => refuse the connection.
