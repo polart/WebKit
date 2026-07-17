@@ -463,6 +463,9 @@ class WebBackForwardListItem;
 #if ENABLE(WK_WEB_EXTENSIONS)
 class WebExtensionControllerProxy;
 #endif
+#if ENABLE(ADBLOCK)
+class AdBlockPageAgent;
+#endif
 class WebFrame;
 class WebFullScreenManager;
 class WebGestureEvent;
@@ -831,6 +834,11 @@ public:
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
+
+#if ENABLE(ADBLOCK)
+    AdBlockPageAgent& adBlockPageAgent();
+    AdBlockPageAgent* adBlockPageAgentIfExists() { return m_adBlockPageAgent.get(); }
+#endif
 
     // -- InjectedBundle methods
 #if ENABLE(CONTEXT_MENUS)
@@ -3426,6 +3434,10 @@ private:
 
     RefPtr<WebCore::NowPlayingMetadataObserver> m_nowPlayingMetadataObserver;
     std::unique_ptr<FrameInfoData> m_mainFrameNavigationInitiator;
+
+#if ENABLE(ADBLOCK)
+    std::unique_ptr<AdBlockPageAgent> m_adBlockPageAgent;
+#endif
 
     mutable RefPtr<Logger> m_logger;
 

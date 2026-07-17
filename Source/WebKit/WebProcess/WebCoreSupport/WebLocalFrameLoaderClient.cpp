@@ -64,6 +64,9 @@
 #include "WebPageGroupProxy.h"
 #include "WebPageProxyMessages.h"
 #include "WebProcess.h"
+#if ENABLE(ADBLOCK)
+#include "WebProcess/AdBlock/AdBlockPageAgent.h"
+#endif
 #include "WebProcessPoolMessages.h"
 #include "WebsitePoliciesData.h"
 #include <JavaScriptCore/APICast.h>
@@ -1949,6 +1952,15 @@ void WebLocalFrameLoaderClient::dispatchDidClearWindowObjectInWorld(DOMWrapperWo
 #endif
 
     webPage->injectedBundleLoaderClient().didClearWindowObjectForFrame(*webPage, m_frame, world);
+
+#if ENABLE(ADBLOCK)
+    // U7: run the navigation's scriptlet (if any) at document start, in the page's
+    // main world, before page scripts. injectPendingScriptlet ignores non-main worlds.
+    if (auto* adBlockPageAgent = webPage->adBlockPageAgentIfExists()) {
+        if (RefPtr coreLocalFrame = m_frame->coreLocalFrame())
+            adBlockPageAgent->injectPendingScriptlet(*coreLocalFrame, world);
+    }
+#endif
 
     RefPtr automationSessionProxy = WebProcess::singleton().automationSessionProxy();
     if (automationSessionProxy && world.isNormal())

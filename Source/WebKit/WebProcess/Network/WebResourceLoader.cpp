@@ -39,6 +39,9 @@
 #include "WebLocalFrameLoaderClient.h"
 #include "WebPage.h"
 #include "WebProcess.h"
+#if ENABLE(ADBLOCK)
+#include "WebProcess/AdBlock/AdBlockPageAgent.h"
+#endif
 #include "WebURLSchemeHandlerProxy.h"
 #include <WebCore/CertificateInfo.h>
 #include <WebCore/DiagnosticLoggingClient.h>
@@ -473,8 +476,20 @@ void WebResourceLoader::stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDeni
 #if ENABLE(ADBLOCK)
 void WebResourceLoader::setAdBlockCosmeticResources(Vector<String>&& hideSelectors, Vector<String>&& exceptions, String&& injectedScript, bool generichide)
 {
-    // Retain the full payload; U7 (scriptlets) and U8 (dynamic hiding) consume the
-    // scriptlet/exception/generichide fields. U6 applies only the hide selectors.
+    // U7: hand the scriptlet to the page agent so it runs at document start of the
+    // committed document. The injected_script the engine returns is already filtered
+    // by the subscription's scriptlet permission mask, so it is injected as-is into
+    // the page's main world.
+    if (!injectedScript.isEmpty()) {
+        RefPtr coreLoader = m_coreLoader;
+        RefPtr frame = coreLoader ? coreLoader->frame() : nullptr;
+        RefPtr webFrame = frame ? WebFrame::fromCoreFrame(*frame) : nullptr;
+        if (RefPtr webPage = webFrame ? webFrame->page() : nullptr)
+            webPage->adBlockPageAgent().setPendingScriptlet(frame->frameID(), String { injectedScript });
+    }
+
+    // Retain the full payload; U8 (dynamic hiding) consumes the exception/generichide
+    // fields. U6 applies only the hide selectors.
     m_adBlockCosmeticResources = { WTF::move(hideSelectors), WTF::move(exceptions), WTF::move(injectedScript), generichide };
 
 #if ENABLE(CONTENT_EXTENSIONS)

@@ -700,6 +700,8 @@ WebProcess/WebProcess.cpp @cost:11
 WebProcess/WebSleepDisablerClient.cpp
 WebProcess/WebSystemSoundDelegate.cpp
 
+WebProcess/AdBlock/AdBlockPageAgent.cpp
+
 WebProcess/Automation/WebAutomationSessionProxy.cpp @no-unify-when(bundle<=8) @cost:4
 WebProcess/Automation/WebAutomationDOMWindowObserver.cpp
 

@@ -158,6 +158,9 @@
 #include "WebPreferencesKeys.h"
 #include "WebPreferencesStore.h"
 #include "WebProcess.h"
+#if ENABLE(ADBLOCK)
+#include "WebProcess/AdBlock/AdBlockPageAgent.h"
+#endif
 #include "WebProcessPoolMessages.h"
 #include "WebProcessProxyMessages.h"
 #include "WebProgressTrackerClient.h"
@@ -1824,6 +1827,15 @@ WebPage::~WebPage()
     setDisplayCaptureEnvironment({ });
 #endif
 }
+
+#if ENABLE(ADBLOCK)
+AdBlockPageAgent& WebPage::adBlockPageAgent()
+{
+    if (!m_adBlockPageAgent)
+        m_adBlockPageAgent = makeUnique<AdBlockPageAgent>();
+    return *m_adBlockPageAgent;
+}
+#endif
 
 IPC::Connection* WebPage::messageSenderConnection() const
 {
