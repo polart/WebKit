@@ -483,6 +483,9 @@ class WebBackForwardListItem;
 #if ENABLE(WK_WEB_EXTENSIONS)
 class WebExtensionControllerProxy;
 #endif
+#if ENABLE(ADBLOCK)
+class AdBlockPageAgent;
+#endif
 class WebFrame;
 class WebFullScreenManager;
 class WebGestureEvent;
@@ -860,6 +863,11 @@ public:
     void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
 
     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
+
+#if ENABLE(ADBLOCK)
+    AdBlockPageAgent& adBlockPageAgent();
+    AdBlockPageAgent* adBlockPageAgentIfExists() { return m_adBlockPageAgent.get(); }
+#endif
 
     // -- InjectedBundle methods
 #if ENABLE(CONTEXT_MENUS)
@@ -3546,6 +3554,10 @@ private:
     };
     // Keyed by node rather than layer: a reload changes the layer but not the node.
     HashMap<WebCore::NodeIdentifier, VolumetricSceneRequest> m_volumetricSceneElements;
+#endif
+
+#if ENABLE(ADBLOCK)
+    std::unique_ptr<AdBlockPageAgent> m_adBlockPageAgent;
 #endif
 
     mutable RefPtr<Logger> m_logger;
