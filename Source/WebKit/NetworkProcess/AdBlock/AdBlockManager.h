@@ -56,12 +56,15 @@ public:
     // Before any list has loaded, or for an allowlisted host, they complete with
     // the pass-through default without touching the engine.
     void checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(AdBlockEngine::CheckResult)>&&);
-    void cspDirectives(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String)>&&);
-    // Cosmetic hide selectors, exceptions, scriptlet, and generichide flag for a
-    // document/subframe navigation (U6). The url_cosmetic_resources JSON is parsed
-    // into the struct on the work queue (never the main thread — R3 pre-paint
-    // budget), then delivered on the main run loop.
-    void cosmeticResources(const String& url, const String& hostname, CompletionHandler<void(AdBlockCosmeticResources)>&&);
+    // The navigation's CSP directives (U5) and cosmetic resources — hide
+    // selectors, exceptions, scriptlet, generichide flag (U6) — for a document/
+    // subframe load, fetched in a single WorkQueue round-trip: the two engine
+    // queries share one dispatch out and one hop back, so the latency-sensitive
+    // navigation path pays one round-trip, not two. The url_cosmetic_resources
+    // JSON is parsed into the struct on the work queue (never the main thread —
+    // R3 pre-paint budget); both results are isolated and delivered together on
+    // the main run loop.
+    void cspAndCosmeticResources(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String cspDirectives, AdBlockCosmeticResources)>&&);
     void hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& hostname, CompletionHandler<void(Vector<String>)>&&);
 
     // Number of queries that actually reached the engine. A test hook: an
