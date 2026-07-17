@@ -102,6 +102,7 @@ ModelProcess/ModelProcess.cpp
 ModelProcess/ModelConnectionToWebProcess.cpp
 ModelProcess/ModelProcessModelPlayerManagerProxy.cpp
 
+NetworkProcess/AdBlock/AdBlockCosmeticResourceParser.cpp
 NetworkProcess/AdBlock/AdBlockEngine.cpp
 NetworkProcess/AdBlock/AdBlockManager.cpp
 NetworkProcess/AdBlock/AdBlockRequestCheck.cpp

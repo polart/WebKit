@@ -15,6 +15,7 @@
 
 #if ENABLE(ADBLOCK)
 
+#include "Shared/AdBlock/AdBlockCosmeticResources.h"
 #include <WebCore/FetchOptionsDestination.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/text/ASCIILiteral.h>
@@ -38,15 +39,16 @@ namespace AdBlock {
 // which the engine already treats as the catch-all type.
 ASCIILiteral requestTypeForDestination(WebCore::FetchOptionsDestination);
 
-// Async subresource/subframe block check plus navigation CSP fetch (U4 + U5).
-// The request is moved in and handed back to the completion, so a single move
-// covers the engine queries and the caller's continuation (blocked == true =>
-// cancel the load). Never blocks a top-level (main-frame) navigation.
-// Pass-through — blocked == false — when no list has loaded or the host is
-// allowlisted (AdBlockManager decides). For document/subdocument requests the
-// completion also carries the engine's CSP directives (R2), empty otherwise;
-// the string is applied to the response later via mergeCSPDirectives.
-void checkNetworkRequest(NetworkProcess&, WebCore::SecurityOrigin* topOrigin, WebCore::FetchOptionsDestination, bool isMainFrameLoad, WebCore::ResourceRequest&&, CompletionHandler<void(WebCore::ResourceRequest&&, bool blocked, String cspDirectives)>&&);
+// Async subresource/subframe block check plus navigation CSP and cosmetic fetch
+// (U4 + U5 + U6). The request is moved in and handed back to the completion, so a
+// single move covers the engine queries and the caller's continuation
+// (blocked == true => cancel the load). Never blocks a top-level (main-frame)
+// navigation. Pass-through — blocked == false — when no list has loaded or the
+// host is allowlisted (AdBlockManager decides). For document/subdocument requests
+// the completion also carries the engine's CSP directives (R2), applied to the
+// response via mergeCSPDirectives, and the cosmetic resources (R3), delivered to
+// the web process with the response; both are empty for other destinations.
+void checkNetworkRequest(NetworkProcess&, WebCore::SecurityOrigin* topOrigin, WebCore::FetchOptionsDestination, bool isMainFrameLoad, WebCore::ResourceRequest&&, CompletionHandler<void(WebCore::ResourceRequest&&, bool blocked, String cspDirectives, AdBlockCosmeticResources)>&&);
 
 // Merges engine-supplied CSP directives into a document/subdocument response,
 // comma-joining with any existing Content-Security-Policy header per CSP2. The

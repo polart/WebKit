@@ -428,7 +428,7 @@ public:
 
 #if ENABLE(CONTENT_EXTENSIONS)
     void addPendingContentExtensionSheet(const String& identifier, StyleSheetContents&);
-    void addPendingContentExtensionDisplayNoneSelector(const String& identifier, const String& selector, uint32_t selectorID);
+    WEBCORE_EXPORT void addPendingContentExtensionDisplayNoneSelector(const String& identifier, const String& selector, uint32_t selectorID);
 #endif
 
     void setShouldOpenExternalURLsPolicy(ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy) { m_shouldOpenExternalURLsPolicy = shouldOpenExternalURLsPolicy; }

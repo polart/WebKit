@@ -470,6 +470,36 @@ void WebResourceLoader::stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDeni
     protect(coreLoader->documentLoader())->stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(*coreLoader->identifier(), response);
 }
 
+#if ENABLE(ADBLOCK)
+void WebResourceLoader::setAdBlockCosmeticResources(Vector<String>&& hideSelectors, Vector<String>&& exceptions, String&& injectedScript, bool generichide)
+{
+    // Retain the full payload; U7 (scriptlets) and U8 (dynamic hiding) consume the
+    // scriptlet/exception/generichide fields. U6 applies only the hide selectors.
+    m_adBlockCosmeticResources = { WTF::move(hideSelectors), WTF::move(exceptions), WTF::move(injectedScript), generichide };
+
+#if ENABLE(CONTENT_EXTENSIONS)
+    // Deliver the hide selectors through the content-extensions pending-selector
+    // pipeline (KTD: reuse the existing plumbing). This message arrives just before
+    // DidReceiveResponse and well before the first data, so the selectors sit in the
+    // document loader's pending list when commitData applies them via
+    // ExtensionStyleSheets::addDisplayNoneSelector — ad elements are display:none
+    // before first paint (R3). Requires CONTENT_EXTENSIONS, which is always enabled
+    // wherever ADBLOCK is; if it were off the selectors would simply not apply.
+    RefPtr coreLoader = m_coreLoader;
+    if (!coreLoader)
+        return;
+    RefPtr documentLoader = coreLoader->documentLoader();
+    if (!documentLoader)
+        return;
+
+    static constexpr auto adBlockCosmeticIdentifier = "WebKitAdBlockCosmetic"_s;
+    uint32_t selectorID = 0;
+    for (auto& selector : m_adBlockCosmeticResources.hideSelectors)
+        documentLoader->addPendingContentExtensionDisplayNoneSelector(adBlockCosmeticIdentifier, selector, selectorID++);
+#endif
+}
+#endif
+
 #if ENABLE(SHAREABLE_RESOURCE)
 void WebResourceLoader::didReceiveResource(ShareableResource::Handle&& handle)
 {

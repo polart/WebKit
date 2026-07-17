@@ -41,6 +41,14 @@ messages -> WebResourceLoader {
 
     StopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(WebCore::ResourceResponse response)
 
+#if ENABLE(ADBLOCK)
+    // U6: cosmetic resources for a document/subframe navigation, sent just before
+    // DidReceiveResponse so the hide selectors reach the document's pending list
+    // before commit. Fields mirror WebKit::AdBlockCosmeticResources; carried as
+    // arguments so no dedicated IPC coder is needed.
+    SetAdBlockCosmeticResources(Vector<String> hideSelectors, Vector<String> exceptions, String injectedScript, bool generichide)
+#endif
+
 #if ENABLE(SHAREABLE_RESOURCE)
     // DidReceiveResource is for when we have the entire resource data available at once, such as when the resource is cached in memory
     DidReceiveResource(WebCore::ShareableResourceHandle resource)

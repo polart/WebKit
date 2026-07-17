@@ -344,7 +344,7 @@ void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurity
     // redirect re-entry all flow through here) before the existing CSP/content-
     // extension path. A block ends the load the same way a content-extension
     // block does.
-    AdBlock::checkNetworkRequest(m_networkProcess, m_topOrigin.get(), m_options.destination, m_requestLoadType == LoadType::MainFrame, WTF::move(request), [weakThis = WeakPtr { *this }, client, handler = WTF::move(handler)](ResourceRequest&& request, bool blocked, String cspDirectives) mutable {
+    AdBlock::checkNetworkRequest(m_networkProcess, m_topOrigin.get(), m_options.destination, m_requestLoadType == LoadType::MainFrame, WTF::move(request), [weakThis = WeakPtr { *this }, client, handler = WTF::move(handler)](ResourceRequest&& request, bool blocked, String cspDirectives, AdBlockCosmeticResources cosmeticResources) mutable {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis) {
             handler(ResourceError { ResourceError::Type::Cancellation });
@@ -354,9 +354,10 @@ void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurity
             handler(protectedThis->accessControlErrorForValidationHandler("Blocked by adblock"_s));
             return;
         }
-        // U5: carry any engine CSP directives to response time (applied in
-        // NetworkResourceLoader::didReceiveResponse); empty for non-documents.
+        // U5/U6: carry the engine CSP directives and cosmetic resources to response
+        // time (applied/delivered in NetworkResourceLoader); empty for non-documents.
         protectedThis->m_adBlockCSPDirectives = WTF::move(cspDirectives);
+        protectedThis->m_adBlockCosmeticResources = WTF::move(cosmeticResources);
         protectedThis->checkRequestAfterAdBlock(WTF::move(request), client, WTF::move(handler));
     });
 }

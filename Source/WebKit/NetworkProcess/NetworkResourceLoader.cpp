@@ -1247,6 +1247,20 @@ void NetworkResourceLoader::sendDidReceiveResponseWithPotentialProcessSwap(const
     if (m_serviceWorkerTimingInfo)
         send(Messages::WebResourceLoader::SetServiceWorkerTimingInfo { *m_serviceWorkerTimingInfo }, coreIdentifier());
 
+#if ENABLE(ADBLOCK)
+    // U6: deliver the cosmetic hide selectors (plus the U7/U8 scriptlet/exception
+    // payload) for a document/subframe navigation just before the response, so the
+    // web process holds them in the document's pending selector list before commit.
+    // Both the network and cache-serve paths reach this send. Empty (skipped) for
+    // non-document loads, allowlisted hosts, and pass-through; not re-sent on a
+    // process swap, mirroring SetServiceWorkerTimingInfo above.
+    if (RefPtr networkLoadChecker = m_networkLoadChecker) {
+        auto& cosmetic = networkLoadChecker->adBlockCosmeticResources();
+        if (!cosmetic.isEmpty())
+            send(Messages::WebResourceLoader::SetAdBlockCosmeticResources { cosmetic.hideSelectors, cosmetic.exceptions, cosmetic.injectedScript, cosmetic.generichide }, coreIdentifier());
+    }
+#endif
+
     Ref connection = m_connection;
 
     auto browsingContextGroupSwitchDecision = BrowsingContextGroupSwitchDecision::StayInGroup;

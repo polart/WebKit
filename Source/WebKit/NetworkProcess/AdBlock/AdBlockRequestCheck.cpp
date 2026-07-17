@@ -127,7 +127,7 @@ static bool containsForbiddenCSPDirective(const String& cspDirectives)
     return false;
 }
 
-void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrigin, FetchOptionsDestination destination, bool isMainFrameLoad, ResourceRequest&& request, CompletionHandler<void(ResourceRequest&&, bool, String)>&& completion)
+void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrigin, FetchOptionsDestination destination, bool isMainFrameLoad, ResourceRequest&& request, CompletionHandler<void(ResourceRequest&&, bool, String, AdBlockCosmeticResources)>&& completion)
 {
     // Read every query input into locals before the request is moved into an
     // async continuation, so the engine queries never touch a moved-from request.
@@ -139,24 +139,31 @@ void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrig
     // host is self and the load is first-party.
     String sourceHostname = topOrigin ? topOrigin->host() : (isMainFrameLoad ? hostname : String { });
     bool isThirdParty = topOrigin && !RegistrableDomain(url).matches(topOrigin->data());
-    bool wantsCSP = isDocumentDestination(destination);
+    // CSP ($csp rules) and cosmetic resources (element hiding, scriptlets) both
+    // only apply to a document/subdocument navigation.
+    bool isDocumentNavigation = isDocumentDestination(destination);
 
     Ref manager { networkProcess.adBlockManager() };
 
-    // Fetches the navigation's CSP directives (document/subdocument only) after a
-    // request has been allowed, then completes. Never runs for a blocked request.
-    auto finish = [manager, urlString, hostname, sourceHostname, requestType, isThirdParty, wantsCSP](ResourceRequest&& request, bool blocked, CompletionHandler<void(ResourceRequest&&, bool, String)>&& completion) mutable {
-        if (blocked || !wantsCSP) {
-            completion(WTF::move(request), blocked, String { });
+    // For an allowed document/subdocument load, fetch the CSP directives (U5) and
+    // then the cosmetic resources (U6) — chained so a single move carries the
+    // request through both queries to the caller's continuation. Never runs for a
+    // blocked request or a non-document load.
+    auto finish = [manager, urlString, hostname, sourceHostname, requestType, isThirdParty, isDocumentNavigation](ResourceRequest&& request, bool blocked, CompletionHandler<void(ResourceRequest&&, bool, String, AdBlockCosmeticResources)>&& completion) mutable {
+        if (blocked || !isDocumentNavigation) {
+            completion(WTF::move(request), blocked, String { }, AdBlockCosmeticResources { });
             return;
         }
-        manager->cspDirectives(urlString, hostname, sourceHostname, requestType, isThirdParty, [request = WTF::move(request), completion = WTF::move(completion)](String csp) mutable {
-            completion(WTF::move(request), false, WTF::move(csp));
+        manager->cspDirectives(urlString, hostname, sourceHostname, requestType, isThirdParty, [manager, urlString, hostname, request = WTF::move(request), completion = WTF::move(completion)](String csp) mutable {
+            manager->cosmeticResources(urlString, hostname, [csp = WTF::move(csp), request = WTF::move(request), completion = WTF::move(completion)](AdBlockCosmeticResources cosmetic) mutable {
+                completion(WTF::move(request), false, WTF::move(csp), WTF::move(cosmetic));
+            });
         });
     };
 
     // Never cancel the top-level navigation itself; only its subresources and
-    // subframes are subject to blocking. A main-frame load still queries CSP.
+    // subframes are subject to blocking. A main-frame load still queries CSP and
+    // cosmetics.
     if (isMainFrameLoad) {
         finish(WTF::move(request), false, WTF::move(completion));
         return;

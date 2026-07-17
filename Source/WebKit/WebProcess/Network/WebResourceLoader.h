@@ -39,6 +39,10 @@
 #include <wtf/RefPtr.h>
 #include <wtf/WeakPtr.h>
 
+#if ENABLE(ADBLOCK)
+#include "Shared/AdBlock/AdBlockCosmeticResources.h"
+#endif
+
 namespace IPC {
 class FormDataReference;
 class SharedBufferReference;
@@ -107,8 +111,12 @@ private:
 
     void drainPendingStreamIfPossible();
 
+#if ENABLE(ADBLOCK)
+    void setAdBlockCosmeticResources(Vector<String>&& hideSelectors, Vector<String>&& exceptions, String&& injectedScript, bool generichide);
+#endif
+
     WebCore::MainFrameMainResource mainFrameMainResource() const;
-    
+
 #if ENABLE(SHAREABLE_RESOURCE)
     void didReceiveResource(WebCore::ShareableResource::Handle&&);
 #endif
@@ -137,6 +145,13 @@ private:
 
     const MonotonicTime m_loadStart;
     std::optional<ServiceWorkerTimingInfo> m_serviceWorkerTimingInfo;
+
+#if ENABLE(ADBLOCK)
+    // Retains the scriptlet/exception/generichide payload delivered alongside the
+    // hide selectors (U6) for the U7 (scriptlet injection) and U8 (dynamic hiding)
+    // agents; the hide selectors themselves are applied to the document at receipt.
+    AdBlockCosmeticResources m_adBlockCosmeticResources;
+#endif
 };
 
 } // namespace WebKit

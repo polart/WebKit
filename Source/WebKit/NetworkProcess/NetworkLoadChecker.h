@@ -25,6 +25,9 @@
 
 #pragma once
 
+#if ENABLE(ADBLOCK)
+#include "Shared/AdBlock/AdBlockCosmeticResources.h"
+#endif
 #include "UserContentControllerIdentifier.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/ContentSecurityPolicyResponseHeaders.h>
@@ -133,6 +136,13 @@ public:
     // cache hit reflects the current engine verdict. Empty for non-document
     // loads, allowlisted hosts, and pass-through.
     const String& adBlockCSPDirectives() const LIFETIME_BOUND { return m_adBlockCSPDirectives; }
+    // Cosmetic hide selectors (and the scriptlet/exception/generichide payload for
+    // U7/U8) fetched during the request check for a document/subdocument load (U6),
+    // delivered to the web process with the response
+    // (WebResourceLoader::SetAdBlockCosmeticResources) so hide selectors apply
+    // before first paint. Empty for non-document loads, allowlisted hosts, and
+    // pass-through.
+    const AdBlockCosmeticResources& adBlockCosmeticResources() const LIFETIME_BOUND { return m_adBlockCosmeticResources; }
 #endif
 
 private:
@@ -218,6 +228,7 @@ private:
 
 #if ENABLE(ADBLOCK)
     String m_adBlockCSPDirectives;
+    AdBlockCosmeticResources m_adBlockCosmeticResources;
 #endif
 
     LoadType m_requestLoadType;
