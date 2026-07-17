@@ -36,6 +36,12 @@ struct AdBlockCosmeticResources {
     // True when a `$generichide` exception applies: the page should not query for
     // additional generic hide selectors (U8).
     bool generichide { false };
+    // True when adblock is active for this navigation (engine loaded, host not
+    // allowlisted) and `$generichide` does not apply, so the web process should
+    // run the mutation-driven dynamic-hiding agent (U8). Unlike the other fields
+    // this is a run signal rather than payload, so it is excluded from isEmpty();
+    // the delivery site sends the payload when it is set even if nothing else is.
+    bool dynamicHidingEnabled { false };
 
     bool isEmpty() const
     {

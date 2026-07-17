@@ -41,7 +41,8 @@ static AdBlockCosmeticResources isolatedCopyCosmeticResources(const AdBlockCosme
         isolatedCopyStrings(resources.hideSelectors),
         isolatedCopyStrings(resources.exceptions),
         resources.injectedScript.isolatedCopy(),
-        resources.generichide
+        resources.generichide,
+        resources.dynamicHidingEnabled
     };
 }
 
@@ -218,6 +219,9 @@ void AdBlockManager::cspAndCosmeticResources(const String& url, const String& ho
             m_engineQueryCount.fetch_add(1, std::memory_order_relaxed);
             directives = engine->cspDirectives(url, hostname, sourceHostname, requestType, isThirdParty).isolatedCopy();
             resources = isolatedCopyCosmeticResources(AdBlock::parseCosmeticResources(engine->cosmeticResourcesJSON(url)));
+            // With an engine loaded and the host not allowlisted (short-circuited
+            // above), run dynamic hiding unless the page opted out via generichide.
+            resources.dynamicHidingEnabled = !resources.generichide;
         }
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), directives = WTF::move(directives), resources = WTF::move(resources)]() mutable {
             completion(WTF::move(directives), WTF::move(resources));

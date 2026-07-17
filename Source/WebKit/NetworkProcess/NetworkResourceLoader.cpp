@@ -1256,8 +1256,11 @@ void NetworkResourceLoader::sendDidReceiveResponseWithPotentialProcessSwap(const
     // process swap, mirroring SetServiceWorkerTimingInfo above.
     if (RefPtr networkLoadChecker = m_networkLoadChecker) {
         auto& cosmetic = networkLoadChecker->adBlockCosmeticResources();
-        if (!cosmetic.isEmpty())
-            send(Messages::WebResourceLoader::SetAdBlockCosmeticResources { cosmetic.hideSelectors, cosmetic.exceptions, cosmetic.injectedScript, cosmetic.generichide }, coreIdentifier());
+        // dynamicHidingEnabled is a run signal (excluded from isEmpty), so send the
+        // payload when it is set even if there are no static selectors to deliver —
+        // the web process needs it to arm the U8 dynamic-hiding agent.
+        if (!cosmetic.isEmpty() || cosmetic.dynamicHidingEnabled)
+            send(Messages::WebResourceLoader::SetAdBlockCosmeticResources { cosmetic.hideSelectors, cosmetic.exceptions, cosmetic.injectedScript, cosmetic.generichide, cosmetic.dynamicHidingEnabled }, coreIdentifier());
     }
 #endif
 

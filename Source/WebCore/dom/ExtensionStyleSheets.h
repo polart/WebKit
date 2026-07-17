@@ -76,7 +76,11 @@ public:
     WEBCORE_EXPORT void addAuthorStyleSheetForTesting(Ref<StyleSheetContents>&&);
 
 #if ENABLE(CONTENT_EXTENSIONS)
+#if ENABLE(ADBLOCK)
+    WEBCORE_EXPORT void addDisplayNoneSelector(const String& identifier, const String& selector, uint32_t selectorID); // Exported for the WebProcess adblock dynamic-hiding agent (U8).
+#else
     void addDisplayNoneSelector(const String& identifier, const String& selector, uint32_t selectorID);
+#endif
     void maybeAddContentExtensionSheet(const String& identifier, StyleSheetContents&);
 #endif
 

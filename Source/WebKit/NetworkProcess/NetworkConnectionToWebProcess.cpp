@@ -2076,6 +2076,35 @@ void NetworkConnectionToWebProcess::takeInvalidMessageStringForTesting(Completio
 }
 #endif
 
+#if ENABLE(ADBLOCK)
+void NetworkConnectionToWebProcess::hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>)>&& completionHandler)
+{
+    // Bound how many tokens one web process can push through the shared engine in a
+    // window. Legitimate pages are de-duplicated and batched web-process-side and
+    // stay far under this; the cap only trips on a hostile or runaway process, which
+    // then gets pass-through (empty) replies until the window rolls over.
+    static constexpr unsigned maxTokensPerWindow = 10000;
+    static constexpr Seconds windowDuration = 10_s;
+
+    auto now = MonotonicTime::now();
+    if (now - m_adBlockDynamicWindowStart > windowDuration) {
+        m_adBlockDynamicWindowStart = now;
+        m_adBlockDynamicTokensInWindow = 0;
+        m_adBlockDynamicWindowLogged = false;
+    }
+    m_adBlockDynamicTokensInWindow += classes.size() + ids.size();
+    if (m_adBlockDynamicTokensInWindow > maxTokensPerWindow) {
+        if (!m_adBlockDynamicWindowLogged) {
+            CONNECTION_RELEASE_LOG_ERROR(Network, "hiddenClassIdSelectors: dynamic-hiding token budget exceeded, throttling queries for this window");
+            m_adBlockDynamicWindowLogged = true;
+        }
+        return completionHandler({ });
+    }
+
+    m_networkProcess->adBlockManager().hiddenClassIdSelectors(WTF::move(classes), WTF::move(ids), WTF::move(exceptions), hostname, WTF::move(completionHandler));
+}
+#endif
+
 } // namespace WebKit
 
 #undef CONNECTION_RELEASE_LOG

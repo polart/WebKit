@@ -165,4 +165,12 @@ messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
 #if ENABLE(IPC_TESTING_API)
     TakeInvalidMessageStringForTesting() -> (String error) Synchronous
 #endif
+
+#if ENABLE(ADBLOCK)
+    // U8: dynamic cosmetic hiding. The web process reports class/id tokens newly
+    // seen in the DOM; the reply carries the generic hide selectors those tokens
+    // match (with the navigation's exception set applied engine-side). Rate-limited
+    // per connection to bound a hostile or runaway web process.
+    HiddenClassIdSelectors(Vector<String> classes, Vector<String> ids, Vector<String> exceptions, String hostname) -> (Vector<String> selectors)
+#endif
 }

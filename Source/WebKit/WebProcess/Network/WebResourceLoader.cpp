@@ -474,23 +474,33 @@ void WebResourceLoader::stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDeni
 }
 
 #if ENABLE(ADBLOCK)
-void WebResourceLoader::setAdBlockCosmeticResources(Vector<String>&& hideSelectors, Vector<String>&& exceptions, String&& injectedScript, bool generichide)
+void WebResourceLoader::setAdBlockCosmeticResources(Vector<String>&& hideSelectors, Vector<String>&& exceptions, String&& injectedScript, bool generichide, bool dynamicHidingEnabled)
 {
+    // Resolve the frame once for the U7 scriptlet stash and the U8 dynamic-hiding
+    // enable below; both hang the payload off the per-page adblock agent keyed by
+    // this frame's identifier.
+    RefPtr coreLoader = m_coreLoader;
+    RefPtr frame = coreLoader ? coreLoader->frame() : nullptr;
+    RefPtr webFrame = frame ? WebFrame::fromCoreFrame(*frame) : nullptr;
+    RefPtr webPage = webFrame ? webFrame->page() : nullptr;
+
     // U7: hand the scriptlet to the page agent so it runs at document start of the
     // committed document. The injected_script the engine returns is already filtered
     // by the subscription's scriptlet permission mask, so it is injected as-is into
     // the page's main world.
-    if (!injectedScript.isEmpty()) {
-        RefPtr coreLoader = m_coreLoader;
-        RefPtr frame = coreLoader ? coreLoader->frame() : nullptr;
-        RefPtr webFrame = frame ? WebFrame::fromCoreFrame(*frame) : nullptr;
-        if (RefPtr webPage = webFrame ? webFrame->page() : nullptr)
-            webPage->adBlockPageAgent().setPendingScriptlet(frame->frameID(), String { injectedScript });
-    }
+    if (webPage && !injectedScript.isEmpty())
+        webPage->adBlockPageAgent().setPendingScriptlet(frame->frameID(), String { injectedScript });
+
+    // U8: when adblock is active for this navigation and generichide does not apply,
+    // arm the mutation-driven dynamic-hiding agent for the frame with the generic-rule
+    // exception set. The agent is injected at document start (see WebLocalFrameLoader-
+    // Client::dispatchDidClearWindowObjectInWorld) only for frames armed here.
+    if (webPage && dynamicHidingEnabled)
+        webPage->adBlockPageAgent().setDynamicHidingEnabled(frame->frameID(), Vector<String> { exceptions });
 
     // Retain the full payload; U8 (dynamic hiding) consumes the exception/generichide
     // fields. U6 applies only the hide selectors.
-    m_adBlockCosmeticResources = { WTF::move(hideSelectors), WTF::move(exceptions), WTF::move(injectedScript), generichide };
+    m_adBlockCosmeticResources = { WTF::move(hideSelectors), WTF::move(exceptions), WTF::move(injectedScript), generichide, dynamicHidingEnabled };
 
 #if ENABLE(CONTENT_EXTENSIONS)
     // Deliver the hide selectors through the content-extensions pending-selector
@@ -500,7 +510,6 @@ void WebResourceLoader::setAdBlockCosmeticResources(Vector<String>&& hideSelecto
     // ExtensionStyleSheets::addDisplayNoneSelector — ad elements are display:none
     // before first paint (R3). Requires CONTENT_EXTENSIONS, which is always enabled
     // wherever ADBLOCK is; if it were off the selectors would simply not apply.
-    RefPtr coreLoader = m_coreLoader;
     if (!coreLoader)
         return;
     RefPtr documentLoader = coreLoader->documentLoader();

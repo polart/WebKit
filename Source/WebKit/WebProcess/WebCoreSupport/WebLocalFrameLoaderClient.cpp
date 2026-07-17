@@ -591,8 +591,12 @@ void WebLocalFrameLoaderClient::dispatchDidStartProvisionalLoad()
     // this navigation's response stashes its own — so a scriptlet matched for one
     // document can never run on a later, unrelated one.
     if (auto* adBlockPageAgent = webPage->adBlockPageAgentIfExists()) {
-        if (RefPtr coreLocalFrame = m_frame->coreLocalFrame())
+        if (RefPtr coreLocalFrame = m_frame->coreLocalFrame()) {
             adBlockPageAgent->clearPendingScriptlet(coreLocalFrame->frameID());
+            // U8: also drop this frame's dynamic-hiding state; the superseding
+            // navigation re-arms it at its own response time.
+            adBlockPageAgent->clearDynamicHiding(coreLocalFrame->frameID());
+        }
     }
 #endif
 
@@ -1968,9 +1972,12 @@ void WebLocalFrameLoaderClient::dispatchDidClearWindowObjectInWorld(DOMWrapperWo
 #if ENABLE(ADBLOCK)
     // U7: run the navigation's scriptlet (if any) at document start, in the page's
     // main world, before page scripts. injectPendingScriptlet ignores non-main worlds.
+    // U8: on the same main-world document-start signal, inject the dynamic-hiding
+    // agent into the adblock isolated world for frames armed at response time.
     if (auto* adBlockPageAgent = webPage->adBlockPageAgentIfExists()) {
         if (RefPtr coreLocalFrame = m_frame->coreLocalFrame())
             adBlockPageAgent->injectPendingScriptlet(*coreLocalFrame, world);
+        adBlockPageAgent->injectDynamicHidingAgentIfNeeded(m_frame, world);
     }
 #endif
 

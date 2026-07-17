@@ -45,8 +45,9 @@ messages -> WebResourceLoader {
     // U6: cosmetic resources for a document/subframe navigation, sent just before
     // DidReceiveResponse so the hide selectors reach the document's pending list
     // before commit. Fields mirror WebKit::AdBlockCosmeticResources; carried as
-    // arguments so no dedicated IPC coder is needed.
-    SetAdBlockCosmeticResources(Vector<String> hideSelectors, Vector<String> exceptions, String injectedScript, bool generichide)
+    // arguments so no dedicated IPC coder is needed. dynamicHidingEnabled tells the
+    // web process to run the U8 mutation-driven dynamic-hiding agent for the frame.
+    SetAdBlockCosmeticResources(Vector<String> hideSelectors, Vector<String> exceptions, String injectedScript, bool generichide, bool dynamicHidingEnabled)
 #endif
 
 #if ENABLE(SHAREABLE_RESOURCE)
