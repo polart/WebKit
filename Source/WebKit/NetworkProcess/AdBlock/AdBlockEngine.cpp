@@ -9,9 +9,7 @@
 
 #if ENABLE(ADBLOCK)
 
-#include <wtf/Assertions.h>
-#include <wtf/StdLibExtras.h>
-#include <wtf/text/CString.h>
+#include "Logging.h"
 
 // The generated cxx bridge does pointer/size arithmetic in its Slice/Vec helpers
 // that -Wunsafe-buffer-usage flags; it is third-party generated code, so silence
@@ -20,6 +18,10 @@
 IGNORE_CLANG_WARNINGS_BEGIN("unsafe-buffer-usage")
 #include "webkit-adblock/src/lib.rs.h"
 IGNORE_CLANG_WARNINGS_END
+
+#include <wtf/Assertions.h>
+#include <wtf/StdLibExtras.h>
+#include <wtf/text/CString.h>
 
 namespace WebKit {
 
@@ -75,7 +77,7 @@ Ref<AdBlockEngine> AdBlockEngine::createFromRules(std::span<const uint8_t> filte
 {
     auto result = adblock::engine_with_rules(ffiBytes(filterListText));
     if (result.result_kind != adblock::ResultKind::Success)
-        WTFLogAlways("AdBlockEngine: filter list failed to compile (%s); using an empty engine", std::string(result.error_message).c_str());
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockEngine: filter list failed to compile (%s); using an empty engine", std::string(result.error_message).c_str());
     return adoptRef(*new AdBlockEngine(makeUniqueWithoutFastMallocCheck<AdBlockEngineHolder>(WTF::move(result.value))));
 }
 
