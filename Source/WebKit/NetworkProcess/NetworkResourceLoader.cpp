@@ -27,6 +27,9 @@
 #include "config.h"
 #include "NetworkResourceLoader.h"
 
+#if ENABLE(ADBLOCK)
+#include "AdBlock/AdBlockRequestCheck.h"
+#endif
 #include "ArgumentCoders.h"
 #include "FormDataReference.h"
 #include "LoadedWebArchive.h"
@@ -1083,6 +1086,13 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
 
     Ref connection = m_connection;
     RefPtr networkLoadChecker = m_networkLoadChecker;
+
+#if ENABLE(ADBLOCK)
+    // U5: apply the CSP directives fetched for this document/subdocument during
+    // the request check (empty for other loads) before the response is used.
+    if (networkLoadChecker)
+        AdBlock::mergeCSPDirectives(m_response, networkLoadChecker->adBlockCSPDirectives());
+#endif
 
     if (shouldCaptureExtraNetworkLoadMetrics() && networkLoadChecker) {
         auto information = networkLoadChecker->takeNetworkLoadInformation();
