@@ -8,6 +8,7 @@
 
 #if ENABLE(ADBLOCK)
 
+#include "AdBlockCosmeticResourceParser.h"
 #include "Logging.h"
 #include <algorithm>
 #include <array>
@@ -32,6 +33,16 @@ static Vector<String> isolatedCopyStrings(const Vector<String>& strings)
     return strings.map([](auto& string) {
         return string.isolatedCopy();
     });
+}
+
+static AdBlockCosmeticResources isolatedCopyCosmeticResources(const AdBlockCosmeticResources& resources)
+{
+    return {
+        isolatedCopyStrings(resources.hideSelectors),
+        isolatedCopyStrings(resources.exceptions),
+        resources.injectedScript.isolatedCopy(),
+        resources.generichide
+    };
 }
 
 Ref<AdBlockManager> AdBlockManager::create()
@@ -207,23 +218,26 @@ void AdBlockManager::cspDirectives(const String& url, const String& hostname, co
     });
 }
 
-void AdBlockManager::cosmeticResourcesJSON(const String& url, const String& hostname, CompletionHandler<void(String)>&& completion)
+void AdBlockManager::cosmeticResources(const String& url, const String& hostname, CompletionHandler<void(AdBlockCosmeticResources)>&& completion)
 {
     if (isAllowlistedHost(hostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
-            completion(String { });
+            completion(AdBlockCosmeticResources { });
         });
         return;
     }
 
     m_queue->dispatch([this, protectedThis = Ref { *this }, url = url.isolatedCopy(), completion = WTF::move(completion)]() mutable {
-        String json;
+        AdBlockCosmeticResources resources;
         if (RefPtr engine = m_engine) {
             m_engineQueryCount.fetch_add(1, std::memory_order_relaxed);
-            json = engine->cosmeticResourcesJSON(url).isolatedCopy();
+            // Parse on the queue (not the main thread) so a large rule set never
+            // lands on the pre-first-paint path; isolate the strings for the hop
+            // back to the main run loop.
+            resources = isolatedCopyCosmeticResources(AdBlock::parseCosmeticResources(engine->cosmeticResourcesJSON(url)));
         }
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), json = WTF::move(json)]() mutable {
-            completion(WTF::move(json));
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), resources = WTF::move(resources)]() mutable {
+            completion(WTF::move(resources));
         });
     });
 }
