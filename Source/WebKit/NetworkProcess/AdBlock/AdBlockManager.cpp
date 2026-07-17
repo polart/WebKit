@@ -197,47 +197,30 @@ void AdBlockManager::checkRequest(const String& url, const String& hostname, con
     });
 }
 
-void AdBlockManager::cspDirectives(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String)>&& completion)
+void AdBlockManager::cspAndCosmeticResources(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String, AdBlockCosmeticResources)>&& completion)
 {
     if (isAllowlistedHost(hostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
-            completion(String { });
+            completion(String { }, AdBlockCosmeticResources { });
         });
         return;
     }
 
     m_queue->dispatch([this, protectedThis = Ref { *this }, url = url.isolatedCopy(), hostname = hostname.isolatedCopy(), sourceHostname = sourceHostname.isolatedCopy(), requestType = requestType.isolatedCopy(), isThirdParty, completion = WTF::move(completion)]() mutable {
         String directives;
-        if (RefPtr engine = m_engine) {
-            m_engineQueryCount.fetch_add(1, std::memory_order_relaxed);
-            directives = engine->cspDirectives(url, hostname, sourceHostname, requestType, isThirdParty).isolatedCopy();
-        }
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), directives = WTF::move(directives)]() mutable {
-            completion(WTF::move(directives));
-        });
-    });
-}
-
-void AdBlockManager::cosmeticResources(const String& url, const String& hostname, CompletionHandler<void(AdBlockCosmeticResources)>&& completion)
-{
-    if (isAllowlistedHost(hostname)) {
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
-            completion(AdBlockCosmeticResources { });
-        });
-        return;
-    }
-
-    m_queue->dispatch([this, protectedThis = Ref { *this }, url = url.isolatedCopy(), completion = WTF::move(completion)]() mutable {
         AdBlockCosmeticResources resources;
         if (RefPtr engine = m_engine) {
+            // One engine pass for the navigation: CSP (U5) and cosmetic resources
+            // (U6) share this single WorkQueue round-trip instead of chaining two.
+            // Count it as one query that reached the engine. Parse the cosmetic
+            // JSON here on the queue (never the main thread — R3 pre-first-paint
+            // budget); isolate both results for the hop back to the main run loop.
             m_engineQueryCount.fetch_add(1, std::memory_order_relaxed);
-            // Parse on the queue (not the main thread) so a large rule set never
-            // lands on the pre-first-paint path; isolate the strings for the hop
-            // back to the main run loop.
+            directives = engine->cspDirectives(url, hostname, sourceHostname, requestType, isThirdParty).isolatedCopy();
             resources = isolatedCopyCosmeticResources(AdBlock::parseCosmeticResources(engine->cosmeticResourcesJSON(url)));
         }
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), resources = WTF::move(resources)]() mutable {
-            completion(WTF::move(resources));
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), directives = WTF::move(directives), resources = WTF::move(resources)]() mutable {
+            completion(WTF::move(directives), WTF::move(resources));
         });
     });
 }

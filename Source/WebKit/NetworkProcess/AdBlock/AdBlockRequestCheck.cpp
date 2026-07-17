@@ -146,18 +146,16 @@ void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrig
     Ref manager { networkProcess.adBlockManager() };
 
     // For an allowed document/subdocument load, fetch the CSP directives (U5) and
-    // then the cosmetic resources (U6) — chained so a single move carries the
-    // request through both queries to the caller's continuation. Never runs for a
-    // blocked request or a non-document load.
+    // cosmetic resources (U6) in a single query — one WorkQueue round-trip carries
+    // both back with the moved request to the caller's continuation. Never runs
+    // for a blocked request or a non-document load.
     auto finish = [manager, urlString, hostname, sourceHostname, requestType, isThirdParty, isDocumentNavigation](ResourceRequest&& request, bool blocked, CompletionHandler<void(ResourceRequest&&, bool, String, AdBlockCosmeticResources)>&& completion) mutable {
         if (blocked || !isDocumentNavigation) {
             completion(WTF::move(request), blocked, String { }, AdBlockCosmeticResources { });
             return;
         }
-        manager->cspDirectives(urlString, hostname, sourceHostname, requestType, isThirdParty, [manager, urlString, hostname, request = WTF::move(request), completion = WTF::move(completion)](String csp) mutable {
-            manager->cosmeticResources(urlString, hostname, [csp = WTF::move(csp), request = WTF::move(request), completion = WTF::move(completion)](AdBlockCosmeticResources cosmetic) mutable {
-                completion(WTF::move(request), false, WTF::move(csp), WTF::move(cosmetic));
-            });
+        manager->cspAndCosmeticResources(urlString, hostname, sourceHostname, requestType, isThirdParty, [request = WTF::move(request), completion = WTF::move(completion)](String csp, AdBlockCosmeticResources cosmetic) mutable {
+            completion(WTF::move(request), false, WTF::move(csp), WTF::move(cosmetic));
         });
     };
 
