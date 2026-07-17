@@ -127,8 +127,11 @@ public:
 
 #if ENABLE(ADBLOCK)
     // Engine CSP directives fetched during the request check for a document/
-    // subdocument load (U5), applied to the response in didReceiveResponse. Empty
-    // for non-document loads, allowlisted hosts, and pass-through.
+    // subdocument load (U5), injected into the response delivered to the web
+    // process on both the network (didReceiveResponse) and cache-serve
+    // (didRetrieveCacheEntry) paths — never into the cached entry itself, so a
+    // cache hit reflects the current engine verdict. Empty for non-document
+    // loads, allowlisted hosts, and pass-through.
     const String& adBlockCSPDirectives() const LIFETIME_BOUND { return m_adBlockCSPDirectives; }
 #endif
 

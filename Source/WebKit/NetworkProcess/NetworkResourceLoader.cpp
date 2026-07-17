@@ -1087,13 +1087,6 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
     Ref connection = m_connection;
     RefPtr networkLoadChecker = m_networkLoadChecker;
 
-#if ENABLE(ADBLOCK)
-    // U5: apply the CSP directives fetched for this document/subdocument during
-    // the request check (empty for other loads) before the response is used.
-    if (networkLoadChecker)
-        AdBlock::mergeCSPDirectives(m_response, networkLoadChecker->adBlockCSPDirectives());
-#endif
-
     if (shouldCaptureExtraNetworkLoadMetrics() && networkLoadChecker) {
         auto information = networkLoadChecker->takeNetworkLoadInformation();
         information.response = m_response;
@@ -1199,6 +1192,16 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
 
     processClearSiteDataHeader(m_response, [this, protectedThis = Ref { *this }, privateRelayed, resourceLoadInfo = WTF::move(resourceLoadInfo), completionHandler = WTF::move(completionHandler)] () mutable {
         auto response = sanitizeResponseIfPossible(ResourceResponse { m_response }, ResourceResponse::SanitizationType::CrossOriginSafe);
+#if ENABLE(ADBLOCK)
+        // U5: inject the engine CSP into the response delivered to the web
+        // process only, never into m_response (which is what gets cached). This
+        // keeps the cache entry free of injected CSP, so a later cache hit or 304
+        // re-injects the CURRENT engine verdict rather than a frozen copy — see
+        // the matching hook in didRetrieveCacheEntry (finding #2). Empty (no-op)
+        // for non-document loads, allowlisted hosts, and pass-through.
+        if (RefPtr networkLoadChecker = m_networkLoadChecker)
+            AdBlock::mergeCSPDirectives(response, networkLoadChecker->adBlockCSPDirectives());
+#endif
         if (isSynchronous()) {
             LOADER_RELEASE_LOG("didReceiveResponse: Using response for synchronous load");
             m_synchronousLoadData->response = WTF::move(response);
@@ -2116,6 +2119,15 @@ void NetworkResourceLoader::didRetrieveCacheEntry(std::unique_ptr<NetworkCache::
     }
 
     response = sanitizeResponseIfPossible(WTF::move(response), ResourceResponse::SanitizationType::CrossOriginSafe);
+#if ENABLE(ADBLOCK)
+    // U5: re-inject the engine CSP when serving a document/subdocument from the
+    // cache (full hit or 304 revalidation) so cached loads carry the same CSP as
+    // a fresh load and always reflect the CURRENT engine verdict (finding #2).
+    // check() runs before retrieveCacheEntry, so the directives are already
+    // computed for this URL; empty (no-op) for non-document and pass-through.
+    if (RefPtr networkLoadChecker = m_networkLoadChecker)
+        AdBlock::mergeCSPDirectives(response, networkLoadChecker->adBlockCSPDirectives());
+#endif
     if (isSynchronous()) {
         m_synchronousLoadData->response = WTF::move(response);
         sendReplyToSynchronousRequest(*m_synchronousLoadData, protect(entry->buffer()).get(), { });
