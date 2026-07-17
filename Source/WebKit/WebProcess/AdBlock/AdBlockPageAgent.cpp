@@ -31,6 +31,11 @@ void AdBlockPageAgent::setPendingScriptlet(WebCore::FrameIdentifier frameID, Str
     m_pendingScriptlets.set(frameID, WTF::move(script));
 }
 
+void AdBlockPageAgent::clearPendingScriptlet(WebCore::FrameIdentifier frameID)
+{
+    m_pendingScriptlets.remove(frameID);
+}
+
 void AdBlockPageAgent::injectPendingScriptlet(WebCore::LocalFrame& frame, WebCore::DOMWrapperWorld& world)
 {
     // Scriptlets only run in the page's main world so that page scripts observe

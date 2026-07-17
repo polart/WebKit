@@ -40,6 +40,12 @@ public:
     // pending entry; an empty script clears it.
     void setPendingScriptlet(WebCore::FrameIdentifier, String&&);
 
+    // Drop any scriptlet stashed for a superseded navigation on this frame. Called
+    // when a new provisional load starts — before that navigation stashes its own
+    // scriptlet — so a scriptlet matched for one document can never run on a later,
+    // unrelated one committed on the same frame.
+    void clearPendingScriptlet(WebCore::FrameIdentifier);
+
     // Called when a world's window object is (re)created for a frame. For the main
     // world, runs and consumes that frame's pending scriptlet.
     void injectPendingScriptlet(WebCore::LocalFrame&, WebCore::DOMWrapperWorld&);
