@@ -73,6 +73,28 @@ void AdBlockManager::setEngineFromRules(Vector<uint8_t>&& rules, CompletionHandl
     });
 }
 
+void AdBlockManager::setEngineFromListFiles(Vector<ListFileInput>&& files, Vector<AdBlockEngine::ListInput>&& inlineLists, String resourcesJSON, CompletionHandler<void()>&& completion)
+{
+    auto isolatedFiles = files.map([](auto& file) {
+        return ListFileInput { file.path.isolatedCopy(), file.permissionMask };
+    });
+    m_queue->dispatch([this, protectedThis = Ref { *this }, files = WTF::move(isolatedFiles), inlineLists = WTF::move(inlineLists), resourcesJSON = resourcesJSON.isolatedCopy(), completion = WTF::move(completion)]() mutable {
+        Vector<AdBlockEngine::ListInput> lists;
+        lists.reserveInitialCapacity(files.size() + inlineLists.size());
+        // Read each list's text here on the work queue — never the main run loop
+        // (a multi-MB EasyList read would block all NetworkProcess loads).
+        for (auto& file : files) {
+            auto text = FileSystem::readEntireFile(file.path);
+            if (text)
+                lists.append({ WTF::move(*text), file.permissionMask });
+        }
+        for (auto& inlineList : inlineLists)
+            lists.append(WTF::move(inlineList));
+        m_engine = AdBlockEngine::createFromLists(lists, resourcesJSON);
+        RunLoop::mainSingleton().dispatch(WTF::move(completion));
+    });
+}
+
 Vector<uint8_t> AdBlockManager::encodeCache(std::span<const uint8_t> payload)
 {
     Vector<uint8_t> encoded;

@@ -33,9 +33,24 @@ public:
     static Ref<AdBlockManager> create();
     ~AdBlockManager();
 
+    // A list backed by a text file, read on the work queue at compile time. The
+    // permission mask gates which scriptlets the list may inject (0 == most
+    // restrictive).
+    struct ListFileInput {
+        String path;
+        uint8_t permissionMask { 0 };
+    };
+
     // Engine lifecycle (all applied on the work queue; the swap is atomic).
     void setEngine(Ref<AdBlockEngine>&&);
     void setEngineFromRules(Vector<uint8_t>&&, CompletionHandler<void()>&& = [] { });
+    // Assembles a single engine from all enabled lists + the scriptlet/redirect
+    // resource library on the work queue and atomically swaps it in (KTD4). The
+    // list-text files are read on the work queue too, so no disk I/O touches the
+    // main run loop; already-in-memory lists (e.g. custom rules) are passed
+    // inline. The list store (U9) uses this for compile-and-swap on any
+    // subscription change.
+    void setEngineFromListFiles(Vector<ListFileInput>&&, Vector<AdBlockEngine::ListInput>&& inlineLists, String resourcesJSON, CompletionHandler<void()>&& = [] { });
 
     // Loads a versioned `.dat` cache. completion(false) if the file is missing,
     // too large, corrupt, or from an incompatible engine version, so the caller
