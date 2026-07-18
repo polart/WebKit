@@ -25,15 +25,9 @@
 // (master toggle, subscription CRUD, custom rules, per-site allowlist, state
 // read-back) through a real `WebPage` and asserts end-to-end network blocking.
 //
-// The adblock config is per-data-store and only lives on *persistent* sessions,
-// so these tests build an isolated persistent store rooted in a temp directory
-// (`_WKWebsiteDataStoreConfiguration(directory:)`), and route every request
-// through a local HTTPS proxy so hostnames like `ads.example.com` resolve to the
-// test server. Blocking is observed from page JS: a `no-cors`, `no-store` fetch
-// of a subresource resolves when allowed and rejects (network cancellation) when
-// the NetworkProcess blocks it. Because the engine rebuild after a config change
-// is asynchronous with no completion handler, assertions poll until the observed
-// state settles.
+// The shared isolated-persistent-store + HTTPS-proxy + fetch-probe harness lives
+// in `AdBlockTestSupport.swift` (`AdBlockTest`); see its header for the setup
+// rationale.
 
 #if ENABLE_SWIFTUI && ENABLE_CXX_INTEROP
 
@@ -44,23 +38,6 @@ private import WebKit_Private._WKWebsiteDataStoreConfiguration
 private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
 import struct Foundation.URL
-import struct Foundation.UUID
-import class Foundation.FileManager
-
-@MainActor
-private struct AdBlockNavigationDecider: WebPage.NavigationDeciding {
-    mutating func decideAuthenticationChallengeDisposition(
-        for challenge: URLAuthenticationChallenge
-    ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
-        (.useCredential, challenge.protectionSpace.serverTrust.map(URLCredential.init(trust:)))
-    }
-}
-
-// A network filter rule blocking every request to `ads.example.com`.
-private let blockAdsRule = "||ads.example.com^"
-
-// The cross-origin subresource used as the block probe.
-private let adSubresourceURL = "https://ads.example.com/ad.js"
 
 @MainActor
 struct AdBlockAPITests {
@@ -68,19 +45,19 @@ struct AdBlockAPITests {
 
     @Test
     func togglingAdBlockBlocksAndUnblocks() async throws {
-        try await withAdBlockPage(configure: { store in
+        try await AdBlockTest.withPage { store in
             store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(blockAdsRule)
-        }) { page, store in
-            var settled = try await pollUntil { try await adSubresourceBlocked(page) }
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, store in
+            var settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
 
             store._setAdBlockEnabled(false)
-            settled = try await pollUntil { !(try await adSubresourceBlocked(page)) }
+            settled = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(settled)
 
             store._setAdBlockEnabled(true)
-            settled = try await pollUntil { try await adSubresourceBlocked(page) }
+            settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
         }
     }
@@ -89,19 +66,19 @@ struct AdBlockAPITests {
 
     @Test
     func allowlistExemptsHostFromBlocking() async throws {
-        try await withAdBlockPage(configure: { store in
+        try await AdBlockTest.withPage { store in
             store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(blockAdsRule)
-        }) { page, store in
-            var settled = try await pollUntil { try await adSubresourceBlocked(page) }
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, store in
+            var settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
 
             store._addAdBlockAllowlistHost("ads.example.com")
-            settled = try await pollUntil { !(try await adSubresourceBlocked(page)) }
+            settled = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(settled)
 
             store._removeAdBlockAllowlistHost("ads.example.com")
-            settled = try await pollUntil { try await adSubresourceBlocked(page) }
+            settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
         }
     }
@@ -110,17 +87,17 @@ struct AdBlockAPITests {
 
     @Test
     func subscriptionStateRoundTripsAndPersistsAcrossRelaunch() async throws {
-        let directory = uniqueDirectory()
+        let directory = AdBlockTest.uniqueDirectory()
         let listURL = try #require(URL(string: "https://lists.example.com/list.txt"))
 
         var server = HTTPServer(protocol: .httpsProxy) {
             Route("/list.txt") {
-                "! Title: Test List\n\(blockAdsRule)\n"
+                "! Title: Test List\n\(AdBlockTest.blockAdsRule)\n"
             }
         }
 
         try await server.run { serverConfiguration in
-            let store = makeAdBlockDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
+            let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
             store._setAdBlockEnabled(true)
             store._setAdBlockCustomRules("||custom.example.com^")
             store._addAdBlockAllowlistHost("allow.example.com")
@@ -154,7 +131,7 @@ struct AdBlockAPITests {
 
     @Test
     func configurationSetBeforeNetworkProcessLaunchIsApplied() async throws {
-        let directory = uniqueDirectory()
+        let directory = AdBlockTest.uniqueDirectory()
 
         var server = HTTPServer(protocol: .httpsProxy) {
             Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
@@ -162,20 +139,20 @@ struct AdBlockAPITests {
         }
 
         try await server.run { serverConfiguration in
-            let store = makeAdBlockDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
+            let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
 
             // Issue every adblock call before any WebPage exists — i.e. before
             // the store's NetworkProcess is launched. The sends must be queued
             // and applied once it starts, not lost.
             store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(blockAdsRule)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
 
             var configuration = WebPage.Configuration()
             configuration.websiteDataStore = store
             let page = WebPage(configuration: configuration, navigationDecider: AdBlockNavigationDecider())
             try await page.load(URL(string: "https://example.com/index")).wait()
 
-            let settled = try await pollUntil { try await adSubresourceBlocked(page) }
+            let settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
         }
     }
@@ -184,47 +161,6 @@ struct AdBlockAPITests {
 // MARK: - Helpers
 
 extension AdBlockAPITests {
-    // Serves a trivial page plus an ad subresource behind an HTTPS proxy, builds
-    // an isolated persistent data store, applies `configure` before the page is
-    // created, loads the page, and runs `body`.
-    fileprivate func withAdBlockPage(
-        configure: (WKWebsiteDataStore) -> Void,
-        body: (WebPage, WKWebsiteDataStore) async throws -> Void
-    ) async throws {
-        let directory = uniqueDirectory()
-
-        var server = HTTPServer(protocol: .httpsProxy) {
-            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            Route("/ad.js") { "globalThis.__adLoaded = true;" }
-        }
-
-        try await server.run { serverConfiguration in
-            let store = makeAdBlockDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            configure(store)
-
-            var configuration = WebPage.Configuration()
-            configuration.websiteDataStore = store
-            let page = WebPage(configuration: configuration, navigationDecider: AdBlockNavigationDecider())
-            try await page.load(URL(string: "https://example.com/index")).wait()
-
-            try await body(page, store)
-        }
-    }
-
-    // True when a `no-cors`/`no-store` fetch of the ad subresource is rejected
-    // by a NetworkProcess block, false when it resolves.
-    fileprivate func adSubresourceBlocked(_ page: WebPage) async throws -> Bool {
-        let result = try await page.callJavaScript("""
-            try {
-                await fetch("\(adSubresourceURL)", { mode: "no-cors", cache: "no-store" });
-                return false;
-            } catch (e) {
-                return true;
-            }
-            """)
-        return (result as? Bool) ?? false
-    }
-
     fileprivate func expectConfig(
         _ state: [AnyHashable: Any]?,
         subscription: String,
@@ -240,41 +176,6 @@ extension AdBlockAPITests {
 
         let subscriptions = try #require(state["subscriptions"] as? [[String: Any]])
         #expect(subscriptions.contains { ($0["url"] as? String) == subscription })
-    }
-}
-
-private func uniqueDirectory() -> URL {
-    let directory = FileManager.default.temporaryDirectory
-        .appendingPathComponent("AdBlockAPITests-\(UUID().uuidString)", isDirectory: true)
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    return directory
-}
-
-@MainActor
-private func makeAdBlockDataStore(directory: URL, httpsProxy: URL?) -> WKWebsiteDataStore {
-    let configuration = _WKWebsiteDataStoreConfiguration(directory: directory)
-    configuration.httpsProxy = httpsProxy
-    return WKWebsiteDataStore._store(with: configuration)
-}
-
-// Polls `condition` every 100ms until it is true or the timeout elapses.
-// Returns whether the condition was observed true. Used because engine rebuilds
-// after a config change are asynchronous with no completion handler.
-@MainActor
-private func pollUntil(
-    timeout: Duration = .seconds(15),
-    _ condition: () async throws -> Bool
-) async throws -> Bool {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: timeout)
-    while true {
-        if try await condition() {
-            return true
-        }
-        if clock.now >= deadline {
-            return false
-        }
-        try await _Concurrency.Task.sleep(for: .milliseconds(100))
     }
 }
 

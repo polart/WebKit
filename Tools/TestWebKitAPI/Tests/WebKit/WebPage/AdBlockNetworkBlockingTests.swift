@@ -1,0 +1,253 @@
+// Copyright (C) 2026 the WebKit adblock integration authors.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+// 1. Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+// 2. Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
+// BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+// THE POSSIBILITY OF SUCH DAMAGE.
+
+// U4 network-request-blocking coverage. Exercises the NetworkProcess blocking
+// hook (`NetworkLoadChecker` / `AdBlockRequestCheck`) end-to-end through the U10
+// embedder API, using the shared harness in `AdBlockTestSupport.swift`. Maps to
+// brave-core's `ad_block_service_browsertest.cc` network cases; see
+// `docs/adblock-brave-test-mapping.md` §3.
+//
+// Scope note: the Swift `HTTPServer` wrapper only serves 200 string bodies — it
+// exposes no status codes/redirects and no WebSocket endpoint. So the doc's
+// `redirectHopReEvaluated`, `blocksWebSocketOpen`, `blocksServiceWorkerRequest`,
+// and `blocksAboutBlankSubresource` scenarios are intentionally *not* covered
+// here: they need harness capabilities that don't exist yet (a redirect/status
+// route, a WS route, and a service-worker-friendly fixture server). They remain
+// required by the plan and should land once the harness grows those probes.
+// The redirect re-entry path (R1) is still covered structurally — the hook sits
+// on `checkRequest`, which redirects re-enter — but not asserted end-to-end here.
+
+#if ENABLE_SWIFTUI && ENABLE_CXX_INTEROP
+
+import Testing
+@_spi(Testing) import WebKit
+private import TestWebKitAPILibrary
+private import WebKit_Private._WKWebsiteDataStoreConfiguration
+private import WebKit_Private.WKWebsiteDataStorePrivate
+import struct Swift.String
+import struct Foundation.URL
+
+@MainActor
+struct AdBlockNetworkBlockingTests {
+    // MARK: Happy path — a matching subresource is blocked
+
+    @Test
+    func blocksMatchingSubresource() async throws {
+        try await AdBlockTest.withPage { store in
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, _ in
+            let settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
+            #expect(settled)
+        }
+    }
+
+    // MARK: A request matching no rule is never blocked
+
+    @Test
+    func allowsNonMatchingSubresource() async throws {
+        try await AdBlockTest.withPage { store in
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, _ in
+            // Prove the engine is live (the matching host is blocked)…
+            #expect(try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) })
+
+            // …then a non-matching host on the same served path still loads.
+            // `cdn.example.com` reuses the `/ad.js` route, so a rejection here
+            // would be a real block, not a missing fixture.
+            let blocked = try await AdBlockTest.subresourceBlocked(page, url: "https://cdn.example.com/ad.js")
+            #expect(!blocked)
+        }
+    }
+
+    // MARK: An `@@` exception rule un-blocks a would-be-blocked request
+
+    @Test
+    func exceptionRuleAllows() async throws {
+        try await AdBlockTest.withPage { store in
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, store in
+            // First observe the block so we know the engine is built and blocking,
+            // then add the exception and observe it un-block after the rebuild.
+            #expect(try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) })
+
+            store._setAdBlockCustomRules("\(AdBlockTest.blockAdsRule)\n@@||ads.example.com^\n")
+            #expect(try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) })
+        }
+    }
+
+    // MARK: A `$third-party` rule blocks cross-site and allows same-site
+
+    @Test
+    func thirdPartyRuleDiscriminates() async throws {
+        let directory = AdBlockTest.uniqueDirectory()
+
+        // `tracker.com` and `example.com` are distinct registrable domains, so a
+        // load of `tracker.com` is third-party from `example.com` and first-party
+        // from `tracker.com`. HTTPServer matches by path only, so both top
+        // documents share the `/index` route and both fetch the `/t.js` route.
+        var server = HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            Route("/t.js") { "globalThis.__t = true;" }
+        }
+
+        try await server.run { serverConfiguration in
+            let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules("||tracker.com^$third-party")
+
+            var configuration = WebPage.Configuration()
+            configuration.websiteDataStore = store
+            let page = WebPage(configuration: configuration, navigationDecider: AdBlockNavigationDecider())
+
+            // Cross-site: example.com → tracker.com is third-party → blocked.
+            try await page.load(URL(string: "https://example.com/index")).wait()
+            #expect(
+                try await AdBlockTest.pollUntil {
+                    try await AdBlockTest.subresourceBlocked(page, url: "https://tracker.com/t.js")
+                }
+            )
+
+            // Same-site: tracker.com → tracker.com is first-party → allowed.
+            try await page.load(URL(string: "https://tracker.com/index")).wait()
+            #expect(
+                try await AdBlockTest.pollUntil {
+                    !(try await AdBlockTest.subresourceBlocked(page, url: "https://tracker.com/t.js"))
+                }
+            )
+        }
+    }
+
+    // MARK: Blocking applies to requests originating inside a subframe
+
+    @Test
+    func blocksInSubframe() async throws {
+        let directory = AdBlockTest.uniqueDirectory()
+
+        // The frame document runs the same block probe and reports its result up
+        // to the top document via postMessage.
+        let frameHTML = """
+            <!DOCTYPE html><html><body><script>
+            (async () => {
+                let blocked;
+                try {
+                    await fetch("\(AdBlockTest.adSubresourceURL)", { mode: "no-cors", cache: "no-store" });
+                    blocked = false;
+                } catch (e) {
+                    blocked = true;
+                }
+                parent.postMessage({ frameBlocked: blocked }, "*");
+            })();
+            </script></body></html>
+            """
+
+        var server = HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            Route("/frame") { frameHTML }
+            Route("/ad.js") { "globalThis.__adLoaded = true;" }
+        }
+
+        try await server.run { serverConfiguration in
+            let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+
+            var configuration = WebPage.Configuration()
+            configuration.websiteDataStore = store
+            let page = WebPage(configuration: configuration, navigationDecider: AdBlockNavigationDecider())
+            try await page.load(URL(string: "https://example.com/index")).wait()
+
+            let settled = try await AdBlockTest.pollUntil { try await frameSubresourceBlocked(page) }
+            #expect(settled)
+        }
+    }
+
+    // MARK: Regression pin — the subresource path actually blocks and toggles
+
+    // Pins the 2026-07-17 "move the request once" fix: a moved-from
+    // `ResourceRequest` had silently disabled *all* subresource/subframe blocking
+    // (the engine saw an empty URL and matched nothing) while leaving the
+    // WebSocket path intact. Assert the subresource path genuinely blocks, then
+    // that clearing the rule restores the load — a straight no-op regression
+    // would fail the first `#expect`.
+    @Test
+    func subresourceBlockThenAllowRegression() async throws {
+        try await AdBlockTest.withPage { store in
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, store in
+            #expect(try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) })
+
+            store._setAdBlockCustomRules("")
+            #expect(try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) })
+        }
+    }
+
+    // MARK: Master toggle off ⇒ nothing is blocked
+
+    @Test
+    func flagOffLoadsEverything() async throws {
+        try await AdBlockTest.withPage { store in
+            store._setAdBlockEnabled(false)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, _ in
+            // With the master toggle off the engine is never consulted, so a
+            // matching request loads. A single check suffices: "disabled" is a
+            // deterministic not-blocked, so there is no rebuild to poll for.
+            let blocked = try await AdBlockTest.adSubresourceBlocked(page)
+            #expect(!blocked)
+        }
+    }
+}
+
+// MARK: - Helpers
+
+extension AdBlockNetworkBlockingTests {
+    // Appends a fresh subframe that runs the block probe and resolves with the
+    // frame's `frameBlocked` result. Each call adds a new frame (with `no-store`
+    // defeating the cache) so polling re-checks against the live engine.
+    @MainActor
+    fileprivate func frameSubresourceBlocked(_ page: WebPage) async throws -> Bool {
+        let result = try await page.callJavaScript(
+            """
+            return await new Promise((resolve) => {
+                const handler = (event) => {
+                    if (event.data && "frameBlocked" in event.data) {
+                        window.removeEventListener("message", handler);
+                        resolve(event.data.frameBlocked);
+                    }
+                };
+                window.addEventListener("message", handler);
+                const frame = document.createElement("iframe");
+                frame.src = "https://example.com/frame";
+                document.body.appendChild(frame);
+            });
+            """
+        )
+        return (result as? Bool) ?? false
+    }
+}
+
+#endif // ENABLE_SWIFTUI && ENABLE_CXX_INTEROP

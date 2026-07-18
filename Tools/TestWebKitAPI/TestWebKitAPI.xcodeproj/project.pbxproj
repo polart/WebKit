@@ -565,6 +565,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				WebKit/WebPage/AdBlockAPITests.swift,
+				WebKit/WebPage/AdBlockNetworkBlockingTests.swift,
+				WebKit/WebPage/AdBlockTestSupport.swift,
 				"WebKit/WebPage/AppKit Gesture Tests/AppKitGesturesTestsSupport.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/BasicAppKitGesturesTests.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/DoubleClickGesturesTests.swift",
@@ -1397,6 +1399,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				WebKit/WebPage/AdBlockAPITests.swift,
+				WebKit/WebPage/AdBlockNetworkBlockingTests.swift,
+				WebKit/WebPage/AdBlockTestSupport.swift,
 				"WebKit/WebPage/AppKit Gesture Tests/AppKitGesturesTestsSupport.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/BasicAppKitGesturesTests.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/DoubleClickGesturesTests.swift",
