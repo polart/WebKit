@@ -1429,58 +1429,75 @@ void NetworkProcess::setTrackingPreventionEnabled(PAL::SessionID sessionID, bool
 #if ENABLE(ADBLOCK)
 void NetworkProcess::setAdBlockEnabled(PAL::SessionID sessionID, bool enabled)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().setEnabled(enabled);
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setEnabled(enabled);
+    }
 }
 
 void NetworkProcess::addAdBlockSubscription(PAL::SessionID sessionID, URL&& url, String&& expectedHash)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().addSubscription(url, expectedHash);
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->addSubscription(url, expectedHash);
+    }
 }
 
 void NetworkProcess::removeAdBlockSubscription(PAL::SessionID sessionID, URL&& url)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().removeSubscription(url);
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->removeSubscription(url);
+    }
 }
 
 void NetworkProcess::setAdBlockSubscriptionEnabled(PAL::SessionID sessionID, URL&& url, bool enabled)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().setSubscriptionEnabled(url, enabled);
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setSubscriptionEnabled(url, enabled);
+    }
 }
 
 void NetworkProcess::refreshAdBlockSubscriptions(PAL::SessionID sessionID)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().refreshAllSubscriptions();
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->refreshAllSubscriptions();
+    }
 }
 
 void NetworkProcess::setAdBlockCustomRules(PAL::SessionID sessionID, String&& rules)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().setCustomRules(rules);
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setCustomRules(rules);
+    }
 }
 
 void NetworkProcess::addAdBlockAllowlistHost(PAL::SessionID sessionID, String&& host)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().addAllowlistedHost(host);
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->addAllowlistedHost(host);
+    }
 }
 
 void NetworkProcess::removeAdBlockAllowlistHost(PAL::SessionID sessionID, String&& host)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        session->ensureAdBlockListStore().removeAllowlistedHost(host);
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->removeAllowlistedHost(host);
+    }
 }
 
 void NetworkProcess::adBlockState(PAL::SessionID sessionID, CompletionHandler<void(String)>&& completionHandler)
 {
-    if (CheckedPtr session = networkSession(sessionID))
-        completionHandler(session->ensureAdBlockListStore().stateJSON());
-    else
-        completionHandler({ });
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            return completionHandler(store->stateJSON());
+    }
+    completionHandler({ });
 }
 #endif // ENABLE(ADBLOCK)
 

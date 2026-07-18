@@ -258,15 +258,24 @@ NetworkSession::~NetworkSession()
 }
 
 #if ENABLE(ADBLOCK)
-AdBlockListStore& NetworkSession::ensureAdBlockListStore()
+AdBlockListStore* NetworkSession::ensureAdBlockListStore()
 {
+    // Ephemeral / non-persistent sessions have no on-disk storage directory.
+    // They share the process-wide engine, so building and persisting a
+    // per-session config for them is both wasteful and wrong: with an empty
+    // directory the store's paths resolve to the filesystem root, and load()
+    // would rebuild (clobbering) the shared engine from an empty list set.
+    // Return null so the embedder-API handlers no-op for such sessions.
+    if (m_adBlockStorageDirectory.isEmpty())
+        return nullptr;
+
     if (!m_adBlockListStore) {
         m_adBlockListStore = AdBlockListStore::create(m_networkProcess, m_sessionID, m_adBlockStorageDirectory);
         // Restore persisted config + warm the engine so blocking is active on
         // relaunch (and the master enable state is mirrored into the manager).
         m_adBlockListStore->load();
     }
-    return *m_adBlockListStore;
+    return m_adBlockListStore.get();
 }
 #endif
 

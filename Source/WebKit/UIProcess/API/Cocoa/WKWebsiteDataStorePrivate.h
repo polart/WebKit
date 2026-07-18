@@ -181,6 +181,13 @@ typedef NS_ENUM(uint8_t, _WKRestrictedOpenerType) {
 // the NetworkProcess; -_getAdBlockStateWithCompletionHandler: reads it back as a
 // JSON object ({ enabled, customRules, allowlist:[…], subscriptions:[{ url,
 // enabled, title, lastFetched }] }).
+//
+// Scope caveat: while each data store persists its own config, the underlying
+// filter engine and its enable/allowlist gate are process-global — one engine
+// per NetworkProcess, shared by every data store in that process (KTD3). So
+// enabling/disabling or editing the allowlist on one data store affects all
+// sessions in the same NetworkProcess, last-writer-wins. Non-persistent
+// (ephemeral) data stores keep no config and these calls are no-ops for them.
 - (void)_setAdBlockEnabled:(BOOL)enabled;
 - (void)_addAdBlockSubscriptionWithURL:(NSURL *)url expectedHash:(NSString *)expectedHash;
 - (void)_removeAdBlockSubscriptionWithURL:(NSURL *)url;

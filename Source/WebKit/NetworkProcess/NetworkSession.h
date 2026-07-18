@@ -149,8 +149,9 @@ public:
     // Lazily creates and loads the per-session adblock list store (config +
     // list texts + `.dat` cache under the session's general storage directory).
     // It drives the process-wide AdBlockManager. The embedder API (U10) routes
-    // its config changes here.
-    AdBlockListStore& ensureAdBlockListStore();
+    // its config changes here. Returns null for ephemeral / non-persistent
+    // sessions (empty storage directory), which have no config to persist.
+    AdBlockListStore* ensureAdBlockListStore();
 #endif
     void setTrackingPreventionEnabled(bool);
     bool NODELETE isTrackingPreventionEnabled() const;

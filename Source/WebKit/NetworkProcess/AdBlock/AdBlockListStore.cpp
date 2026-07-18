@@ -382,12 +382,19 @@ void AdBlockListStore::setResources(String resourcesJSON)
 
 void AdBlockListStore::setEnabled(bool enabled)
 {
+    // Always re-assert the manager's query gate. The AdBlockManager is
+    // process-global (KTD3: one engine per NetworkProcess, shared across data
+    // stores), so another session may have flipped it since this store last set
+    // it — a bare `m_enabled == enabled` early-return could otherwise leave the
+    // shared gate stale (this store thinks it is enabled while the gate is off).
+    // The compiled engine stays warm; only the gate flips.
+    Ref { m_networkProcess.get() }->adBlockManager().setEnabled(enabled);
+
+    // Persist only when this store's own value actually changed.
     if (m_enabled == enabled)
         return;
     m_enabled = enabled;
     persistConfig();
-    // The compiled engine stays warm; only the manager's query gate flips.
-    Ref { m_networkProcess.get() }->adBlockManager().setEnabled(enabled);
 }
 
 String AdBlockListStore::stateJSON() const
