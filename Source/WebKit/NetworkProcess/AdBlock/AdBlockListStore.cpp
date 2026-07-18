@@ -116,6 +116,7 @@ void AdBlockListStore::loadConfig()
     m_subscriptions.clear();
     m_customRules = String { };
     m_allowlist.clear();
+    m_enabled = false;
 
     auto contents = FileSystem::readEntireFile(configPath());
     if (!contents)
@@ -128,6 +129,7 @@ void AdBlockListStore::loadConfig()
         return;
     }
 
+    m_enabled = root->getBoolean("enabled"_s).value_or(false);
     m_customRules = root->getString("customRules"_s);
 
     if (RefPtr allowlist = root->getArray("allowlist"_s)) {
@@ -168,6 +170,7 @@ void AdBlockListStore::persistConfig() const
 {
     auto root = JSON::Object::create();
     root->setInteger("version"_s, configFormatVersion);
+    root->setBoolean("enabled"_s, m_enabled);
     root->setString("customRules"_s, m_customRules);
 
     auto allowlist = JSON::Array::create();
@@ -201,6 +204,7 @@ void AdBlockListStore::load(CompletionHandler<void()>&& completion)
     Ref networkProcess { m_networkProcess.get() };
     Ref manager { networkProcess->adBlockManager() };
     manager->setAllowlistedHosts(HashSet<String> { m_allowlist });
+    manager->setEnabled(m_enabled);
 
     // Warm `.dat` fast path: an intact cache restores the last compiled engine
     // without re-parsing. Any failure (missing/corrupt/version-mismatched)
@@ -374,6 +378,48 @@ Vector<String> AdBlockListStore::allowlistedHosts() const
 void AdBlockListStore::setResources(String resourcesJSON)
 {
     m_resourcesJSON = WTF::move(resourcesJSON);
+}
+
+void AdBlockListStore::setEnabled(bool enabled)
+{
+    // Always re-assert the manager's query gate. The AdBlockManager is
+    // process-global (one engine per NetworkProcess, shared across data
+    // stores), so another session may have flipped it since this store last set
+    // it — a bare `m_enabled == enabled` early-return could otherwise leave the
+    // shared gate stale (this store thinks it is enabled while the gate is off).
+    // The compiled engine stays warm; only the gate flips.
+    Ref { m_networkProcess.get() }->adBlockManager().setEnabled(enabled);
+
+    // Persist only when this store's own value actually changed.
+    if (m_enabled == enabled)
+        return;
+    m_enabled = enabled;
+    persistConfig();
+}
+
+String AdBlockListStore::stateJSON() const
+{
+    auto root = JSON::Object::create();
+    root->setBoolean("enabled"_s, m_enabled);
+    root->setString("customRules"_s, m_customRules);
+
+    auto allowlist = JSON::Array::create();
+    for (auto& host : m_allowlist)
+        allowlist->pushString(host);
+    root->setArray("allowlist"_s, WTF::move(allowlist));
+
+    auto subs = JSON::Array::create();
+    for (auto& sub : m_subscriptions) {
+        auto object = JSON::Object::create();
+        object->setString("url"_s, sub.url.string());
+        object->setBoolean("enabled"_s, sub.enabled);
+        object->setString("title"_s, sub.title);
+        object->setDouble("lastFetched"_s, sub.lastFetched);
+        subs->pushObject(WTF::move(object));
+    }
+    root->setArray("subscriptions"_s, WTF::move(subs));
+
+    return root->toJSONString();
 }
 
 void AdBlockListStore::scheduleRebuild()
