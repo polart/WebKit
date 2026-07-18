@@ -61,6 +61,14 @@ public:
     // if there is no engine yet or the write fails.
     void saveCacheFile(const String& path, CompletionHandler<void(bool)>&&);
 
+    // Master enable gate (U10 embedder API). While disabled, every query
+    // short-circuits to the pass-through default without touching the engine, so
+    // toggling adblock off is instant and keeps the compiled engine warm for an
+    // equally instant re-enable. Default off: nothing blocks until the embedder
+    // enables it. Set from the main run loop, read on any thread.
+    void setEnabled(bool enabled) { m_enabled.store(enabled, std::memory_order_relaxed); }
+    bool isEnabled() const { return m_enabled.load(std::memory_order_relaxed); }
+
     // Per-site allowlist (KTD8). Mutated and queried from the caller thread.
     void setAllowlistedHosts(HashSet<String>&&);
     void addAllowlistedHost(const String&);
@@ -102,6 +110,7 @@ private:
     RefPtr<AdBlockEngine> m_engine;
     mutable Lock m_allowlistLock;
     HashSet<String> m_allowlist WTF_GUARDED_BY_LOCK(m_allowlistLock);
+    std::atomic<bool> m_enabled { false };
     std::atomic<uint64_t> m_engineQueryCount { 0 };
 };
 

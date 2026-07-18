@@ -169,6 +169,21 @@ typedef NS_OPTIONS(NSUInteger, _WKWebsiteDataStoreFetchOptions) {
 - (void)_installMockParentalControlsURLFilterForTestingWithBlockedURLs:(NSArray<NSURL *> *)blockedURLs completionHandler:(void(^)(void))completionHandler WK_API_AVAILABLE(macos(27.0), ios(27.0));
 - (void)_installMockParentalControlsURLFilterForTestingWithBlockedURLs:(NSArray<NSURL *> *)blockedURLs replacementData:(NSData * _Nullable)replacementData completionHandler:(void(^)(void))completionHandler WK_API_AVAILABLE(macos(27.0), ios(27.0));
 
+// Adblock embedder API. Master toggle, filter-list subscription management,
+// custom rules, and per-site allowlist. Config is persisted per data store in
+// the NetworkProcess; -_getAdBlockStateWithCompletionHandler: reads it back as a
+// JSON object ({ enabled, customRules, allowlist:[…], subscriptions:[{ url,
+// enabled, title, lastFetched }] }).
+- (void)_setAdBlockEnabled:(BOOL)enabled;
+- (void)_addAdBlockSubscriptionWithURL:(NSURL *)url expectedHash:(NSString *)expectedHash;
+- (void)_removeAdBlockSubscriptionWithURL:(NSURL *)url;
+- (void)_setAdBlockSubscriptionWithURL:(NSURL *)url enabled:(BOOL)enabled;
+- (void)_refreshAdBlockSubscriptions;
+- (void)_setAdBlockCustomRules:(NSString *)rules;
+- (void)_addAdBlockAllowlistHost:(NSString *)host;
+- (void)_removeAdBlockAllowlistHost:(NSString *)host;
+- (void)_getAdBlockStateWithCompletionHandler:(void(^)(NSDictionary *))completionHandler;
+
 @end
 
 NS_ASSUME_NONNULL_END
