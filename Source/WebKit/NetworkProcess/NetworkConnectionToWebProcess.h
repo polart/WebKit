@@ -75,6 +75,10 @@
 #include "IPCTester.h"
 #endif
 
+#if ENABLE(ADBLOCK)
+#include "AdBlock/AdBlockDynamicHidingLimiter.h"
+#endif
+
 #if PLATFORM(COCOA)
 #include "CocoaWindow.h"
 #endif
@@ -355,6 +359,10 @@ private:
     void removeSyntheticParkedLoaderForTesting(NetworkResourceLoadIdentifier, CompletionHandler<void()>&&);
 #endif
 
+#if ENABLE(ADBLOCK)
+    void hiddenClassIdSelectors(WebPageProxyIdentifier, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>)>&&);
+#endif
+
     void removeLoadIdentifier(WebCore::ResourceLoaderIdentifier);
     void pageLoadCompleted(WebCore::PageIdentifier);
     void browsingContextRemoved(WebPageProxyIdentifier, WebCore::PageIdentifier, WebCore::FrameIdentifier);
@@ -593,6 +601,14 @@ private:
 #endif
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
     HashSet<String> m_hostsWithCookieListeners;
+#endif
+#if ENABLE(ADBLOCK)
+    // Per-page token budget for dynamic-hiding queries, so a hostile or runaway
+    // web process cannot spam tokens to overload the shared engine, and one page
+    // cannot starve dynamic hiding for the others sharing this connection. The policy
+    // lives in the AdBlock component; this connection just owns the instance so it is
+    // torn down with the connection.
+    AdBlockDynamicHidingLimiter m_adBlockDynamicHidingLimiter;
 #endif
 
     bool m_captureExtraNetworkLoadMetricsEnabled { false };
