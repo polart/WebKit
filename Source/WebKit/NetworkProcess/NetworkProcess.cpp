@@ -30,6 +30,9 @@
 #include "ArgumentCoders.h"
 #include "Attachment.h"
 #include "AuthenticationManager.h"
+#if ENABLE(ADBLOCK)
+#include "AdBlock/AdBlockListStore.h"
+#endif
 #include "AuxiliaryProcessMessages.h"
 #include "BackgroundFetchState.h"
 #include "DidFilterKnownLinkDecoration.h"
@@ -677,6 +680,12 @@ void NetworkProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters
     auto& session = m_networkSessions.ensure(sessionID, [&]() {
         return NetworkSession::create(*this, parameters.networkSessionParameters);
     }).iterator->value;
+
+#if ENABLE(ADBLOCK)
+    // Restore persisted adblock config + warm the engine at session creation, so
+    // a previously-enabled filter set blocks on relaunch without an SPI round-trip.
+    session->ensureAdBlockListStore();
+#endif
 
     if (m_isSuspended)
         session->storageManager().suspend([] { });
@@ -1416,6 +1425,64 @@ void NetworkProcess::setTrackingPreventionEnabled(PAL::SessionID sessionID, bool
     if (CheckedPtr session = networkSession(sessionID))
         session->setTrackingPreventionEnabled(enabled);
 }
+
+#if ENABLE(ADBLOCK)
+void NetworkProcess::setAdBlockEnabled(PAL::SessionID sessionID, bool enabled)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().setEnabled(enabled);
+}
+
+void NetworkProcess::addAdBlockSubscription(PAL::SessionID sessionID, URL&& url, String&& expectedHash)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().addSubscription(url, expectedHash);
+}
+
+void NetworkProcess::removeAdBlockSubscription(PAL::SessionID sessionID, URL&& url)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().removeSubscription(url);
+}
+
+void NetworkProcess::setAdBlockSubscriptionEnabled(PAL::SessionID sessionID, URL&& url, bool enabled)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().setSubscriptionEnabled(url, enabled);
+}
+
+void NetworkProcess::refreshAdBlockSubscriptions(PAL::SessionID sessionID)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().refreshAllSubscriptions();
+}
+
+void NetworkProcess::setAdBlockCustomRules(PAL::SessionID sessionID, String&& rules)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().setCustomRules(rules);
+}
+
+void NetworkProcess::addAdBlockAllowlistHost(PAL::SessionID sessionID, String&& host)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().addAllowlistedHost(host);
+}
+
+void NetworkProcess::removeAdBlockAllowlistHost(PAL::SessionID sessionID, String&& host)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        session->ensureAdBlockListStore().removeAllowlistedHost(host);
+}
+
+void NetworkProcess::adBlockState(PAL::SessionID sessionID, CompletionHandler<void(String)>&& completionHandler)
+{
+    if (CheckedPtr session = networkSession(sessionID))
+        completionHandler(session->ensureAdBlockListStore().stateJSON());
+    else
+        completionHandler({ });
+}
+#endif // ENABLE(ADBLOCK)
 
 void NetworkProcess::updateStorageAccessPromptQuirks(Vector<WebCore::OrganizationStorageAccessPromptQuirk>&& organizationStorageAccessPromptQuirks)
 {

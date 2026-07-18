@@ -77,6 +77,9 @@ enum class Critical : bool;
 }
 
 namespace WebKit {
+#if ENABLE(ADBLOCK)
+class AdBlockListStore;
+#endif
 class BackgroundFetchStoreImpl;
 class NetworkBroadcastChannelRegistry;
 class NetworkDataTask;
@@ -141,6 +144,14 @@ public:
     void destroyPrivateClickMeasurementStore(CompletionHandler<void()>&&);
 
     WebResourceLoadStatisticsStore* resourceLoadStatistics() const { return m_resourceLoadStatistics.get(); }
+
+#if ENABLE(ADBLOCK)
+    // Lazily creates and loads the per-session adblock list store (config +
+    // list texts + `.dat` cache under the session's general storage directory).
+    // It drives the process-wide AdBlockManager. The embedder API (U10) routes
+    // its config changes here.
+    AdBlockListStore& ensureAdBlockListStore();
+#endif
     void setTrackingPreventionEnabled(bool);
     bool NODELETE isTrackingPreventionEnabled() const;
     static WebCore::IsKnownCrossSiteTracker isRequestToKnownCrossSiteTracker(const WebCore::ResourceRequest&);
@@ -335,6 +346,10 @@ protected:
     PAL::SessionID m_sessionID;
     const Ref<NetworkProcess> m_networkProcess;
     ThreadSafeWeakHashSet<NetworkDataTask> m_dataTaskSet;
+#if ENABLE(ADBLOCK)
+    String m_adBlockStorageDirectory;
+    RefPtr<AdBlockListStore> m_adBlockListStore;
+#endif
     String m_resourceLoadStatisticsDirectory;
     RefPtr<WebResourceLoadStatisticsStore> m_resourceLoadStatistics;
     ShouldIncludeLocalhost m_shouldIncludeLocalhostInResourceLoadStatistics { ShouldIncludeLocalhost::Yes };

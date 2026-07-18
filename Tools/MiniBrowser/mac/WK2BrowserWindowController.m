@@ -681,6 +681,7 @@ static BOOL areEssentiallyEqual(double a, double b)
 
     _webView.configuration.defaultWebpagePreferences.securityRestrictionMode = settings.enhancedSecurityEnabled ? WKSecurityRestrictionModeMaximizeCompatibility : WKSecurityRestrictionModeNone;
     _webView.configuration.websiteDataStore._resourceLoadStatisticsEnabled = settings.resourceLoadStatisticsEnabled;
+    [_webView.configuration.websiteDataStore _setAdBlockEnabled:settings.adBlockEnabled];
 
     [self setWebViewFillsWindow:settings.webViewFillsWindow];
 

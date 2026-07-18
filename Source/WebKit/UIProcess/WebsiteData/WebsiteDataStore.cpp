@@ -2030,6 +2030,53 @@ void WebsiteDataStore::setTrackingPreventionEnabled(bool enabled)
         processPool->sendToAllProcessesForSession(Messages::WebProcess::SetTrackingPreventionEnabled(enabled), m_sessionID);
 }
 
+#if ENABLE(ADBLOCK)
+void WebsiteDataStore::setAdBlockEnabled(bool enabled)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockEnabled(m_sessionID, enabled), 0);
+}
+
+void WebsiteDataStore::addAdBlockSubscription(const URL& url, const String& expectedHash)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::AddAdBlockSubscription(m_sessionID, url, expectedHash), 0);
+}
+
+void WebsiteDataStore::removeAdBlockSubscription(const URL& url)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::RemoveAdBlockSubscription(m_sessionID, url), 0);
+}
+
+void WebsiteDataStore::setAdBlockSubscriptionEnabled(const URL& url, bool enabled)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockSubscriptionEnabled(m_sessionID, url, enabled), 0);
+}
+
+void WebsiteDataStore::refreshAdBlockSubscriptions()
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::RefreshAdBlockSubscriptions(m_sessionID), 0);
+}
+
+void WebsiteDataStore::setAdBlockCustomRules(const String& rules)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockCustomRules(m_sessionID, rules), 0);
+}
+
+void WebsiteDataStore::addAdBlockAllowlistHost(const String& host)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::AddAdBlockAllowlistHost(m_sessionID, host), 0);
+}
+
+void WebsiteDataStore::removeAdBlockAllowlistHost(const String& host)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::RemoveAdBlockAllowlistHost(m_sessionID, host), 0);
+}
+
+void WebsiteDataStore::adBlockState(CompletionHandler<void(String)>&& completionHandler)
+{
+    protect(networkProcess())->sendWithAsyncReply(Messages::NetworkProcess::AdBlockState(m_sessionID), WTF::move(completionHandler));
+}
+#endif // ENABLE(ADBLOCK)
+
 void WebsiteDataStore::setStatisticsTestingCallback(Function<void(const String&)>&& callback)
 {
     if (callback)

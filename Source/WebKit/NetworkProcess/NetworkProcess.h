@@ -361,6 +361,17 @@ public:
 
 #if ENABLE(ADBLOCK)
     AdBlockManager& adBlockManager() LIFETIME_BOUND { return m_adBlockManager; }
+
+    // Embedder API (U10) message handlers — forward to the session's list store.
+    void setAdBlockEnabled(PAL::SessionID, bool);
+    void addAdBlockSubscription(PAL::SessionID, URL&&, String&& expectedHash);
+    void removeAdBlockSubscription(PAL::SessionID, URL&&);
+    void setAdBlockSubscriptionEnabled(PAL::SessionID, URL&&, bool);
+    void refreshAdBlockSubscriptions(PAL::SessionID);
+    void setAdBlockCustomRules(PAL::SessionID, String&&);
+    void addAdBlockAllowlistHost(PAL::SessionID, String&&);
+    void removeAdBlockAllowlistHost(PAL::SessionID, String&&);
+    void adBlockState(PAL::SessionID, CompletionHandler<void(String)>&&);
 #endif
 
     void syncLocalStorage(CompletionHandler<void()>&&);

@@ -186,6 +186,22 @@ public:
 
     bool trackingPreventionEnabled() const;
     void setTrackingPreventionEnabled(bool);
+
+#if ENABLE(ADBLOCK)
+    // Embedder API (U10). Each setter forwards to the NetworkProcess (launching
+    // it and registering the session on demand, so calls made before launch are
+    // applied once it starts). Persistent config lives NetworkProcess-side; the
+    // state read-back returns it as a JSON string.
+    void setAdBlockEnabled(bool);
+    void addAdBlockSubscription(const URL&, const String& expectedHash);
+    void removeAdBlockSubscription(const URL&);
+    void setAdBlockSubscriptionEnabled(const URL&, bool);
+    void refreshAdBlockSubscriptions();
+    void setAdBlockCustomRules(const String&);
+    void addAdBlockAllowlistHost(const String&);
+    void removeAdBlockAllowlistHost(const String&);
+    void adBlockState(CompletionHandler<void(String)>&&);
+#endif
     bool NODELETE resourceLoadStatisticsDebugMode() const;
     void setResourceLoadStatisticsDebugMode(bool);
     void setResourceLoadStatisticsDebugMode(bool, CompletionHandler<void()>&&);

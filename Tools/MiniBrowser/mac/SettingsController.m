@@ -28,6 +28,7 @@
 #import "AppDelegate.h"
 #import "BrowserWindowController.h"
 #import <WebKit/WKPreferencesPrivate.h>
+#import <WebKit/WKWebsiteDataStorePrivate.h>
 #import <WebKit/_WKExperimentalFeature.h>
 #import <WebKit/_WKInternalDebugFeature.h>
 
@@ -54,6 +55,7 @@ static NSString * const IncrementalRenderingSuppressedPreferenceKey = @"Incremen
 static NSString * const AcceleratedDrawingEnabledPreferenceKey = @"AcceleratedDrawingEnabled";
 static NSString * const EnhancedSecurityEnabledPreferenceKey = @"EnhancedSecurityEnabled";
 static NSString * const ResourceLoadStatisticsEnabledPreferenceKey = @"ResourceLoadStatisticsEnabled";
+static NSString * const AdBlockEnabledPreferenceKey = @"AdBlockEnabled";
 
 static NSString * const NonFastScrollableRegionOverlayVisiblePreferenceKey = @"NonFastScrollableRegionOverlayVisible";
 static NSString * const WheelEventHandlerRegionOverlayVisiblePreferenceKey = @"WheelEventHandlerRegionOverlayVisible";
@@ -197,6 +199,8 @@ static NSMenu *addSubmenuToMenu(NSMenu *menu, NSString *title)
     addItem(@"Enable Accelerated Drawing", @selector(toggleAcceleratedDrawingEnabled:));
     addItem(@"Enable Enhanced Security", @selector(toggleEnhancedSecurityEnabled:));
     addItem(@"Enable Resource Load Statistics", @selector(toggleResourceLoadStatisticsEnabled:));
+    addItem(@"Block Ads (Adblock)", @selector(toggleAdBlockEnabled:));
+    addItem(@"Add Adblock Filter List URL…", @selector(addAdBlockListURL:));
     addItem(@"Enable Large Image Async Decoding", @selector(toggleLargeImageAsyncDecodingEnabled:));
     addItem(@"Enable Animated Image Async Decoding", @selector(toggleAnimatedImageAsyncDecodingEnabled:));
     addItem(@"Enable color-filter", @selector(toggleAppleColorFilterEnabled:));
@@ -404,6 +408,8 @@ static NSMenu *addSubmenuToMenu(NSMenu *menu, NSString *title)
         [menuItem setState:[self enhancedSecurityEnabled] ? NSControlStateValueOn : NSControlStateValueOff];
     else if (action == @selector(toggleResourceLoadStatisticsEnabled:))
         [menuItem setState:[self resourceLoadStatisticsEnabled] ? NSControlStateValueOn : NSControlStateValueOff];
+    else if (action == @selector(toggleAdBlockEnabled:))
+        [menuItem setState:[self adBlockEnabled] ? NSControlStateValueOn : NSControlStateValueOff];
     else if (action == @selector(toggleLargeImageAsyncDecodingEnabled:))
         [menuItem setState:[self largeImageAsyncDecodingEnabled] ? NSControlStateValueOn : NSControlStateValueOff];
     else if (action == @selector(toggleAnimatedImageAsyncDecodingEnabled:))
@@ -705,6 +711,43 @@ static NSMenu *addSubmenuToMenu(NSMenu *menu, NSString *title)
 - (BOOL)resourceLoadStatisticsEnabled
 {
     return [[NSUserDefaults standardUserDefaults] boolForKey:ResourceLoadStatisticsEnabledPreferenceKey];
+}
+
+- (void)toggleAdBlockEnabled:(id)sender
+{
+    [self _toggleBooleanDefault:AdBlockEnabledPreferenceKey];
+}
+
+- (BOOL)adBlockEnabled
+{
+    return [[NSUserDefaults standardUserDefaults] boolForKey:AdBlockEnabledPreferenceKey];
+}
+
+- (void)addAdBlockListURL:(id)sender
+{
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Add Adblock Filter List";
+    alert.informativeText = @"Enter an HTTPS URL of an ABP-format filter list (e.g. EasyList). It will be downloaded and compiled into the engine.";
+    [alert addButtonWithTitle:@"Add"];
+    [alert addButtonWithTitle:@"Cancel"];
+
+    NSTextField *input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 360, 24)];
+    input.placeholderString = @"https://easylist.to/easylist/easylist.txt";
+    alert.accessoryView = input;
+
+    if ([alert runModal] != NSAlertFirstButtonReturn)
+        return;
+
+    NSURL *url = [NSURL URLWithString:input.stringValue];
+    if (!url.scheme.length)
+        return;
+
+    WKWebsiteDataStore *dataStore = [[[NSApplication sharedApplication] browserAppDelegate] persistentDataStore];
+    // Adding a list implies the user wants blocking on; enable it too.
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:AdBlockEnabledPreferenceKey];
+    [dataStore _setAdBlockEnabled:YES];
+    [dataStore _addAdBlockSubscriptionWithURL:url expectedHash:@""];
+    [[[NSApplication sharedApplication] browserAppDelegate] didChangeSettings];
 }
 
 - (void)toggleLargeImageAsyncDecodingEnabled:(id)sender

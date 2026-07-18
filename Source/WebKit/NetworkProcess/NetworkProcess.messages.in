@@ -311,4 +311,16 @@ messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
 #if HAVE(ENHANCED_SECURITY_LINKS)
     IsEnhancedSecurityLink(URL url) -> (bool isEnhancedSecurityLink)
 #endif
+
+#if ENABLE(ADBLOCK)
+    SetAdBlockEnabled(PAL::SessionID sessionID, bool enabled)
+    AddAdBlockSubscription(PAL::SessionID sessionID, URL url, String expectedHash)
+    RemoveAdBlockSubscription(PAL::SessionID sessionID, URL url)
+    SetAdBlockSubscriptionEnabled(PAL::SessionID sessionID, URL url, bool enabled)
+    RefreshAdBlockSubscriptions(PAL::SessionID sessionID)
+    SetAdBlockCustomRules(PAL::SessionID sessionID, String rules)
+    AddAdBlockAllowlistHost(PAL::SessionID sessionID, String host)
+    RemoveAdBlockAllowlistHost(PAL::SessionID sessionID, String host)
+    AdBlockState(PAL::SessionID sessionID) -> (String stateJSON)
+#endif
 }

@@ -1652,6 +1652,75 @@ struct WKWebsiteData {
 #endif
 }
 
+- (void)_setAdBlockEnabled:(BOOL)enabled
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockEnabled(enabled);
+#endif
+}
+
+- (void)_addAdBlockSubscriptionWithURL:(NSURL *)url expectedHash:(NSString *)expectedHash
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->addAdBlockSubscription(URL { url }, expectedHash);
+#endif
+}
+
+- (void)_removeAdBlockSubscriptionWithURL:(NSURL *)url
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->removeAdBlockSubscription(URL { url });
+#endif
+}
+
+- (void)_setAdBlockSubscriptionWithURL:(NSURL *)url enabled:(BOOL)enabled
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockSubscriptionEnabled(URL { url }, enabled);
+#endif
+}
+
+- (void)_refreshAdBlockSubscriptions
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->refreshAdBlockSubscriptions();
+#endif
+}
+
+- (void)_setAdBlockCustomRules:(NSString *)rules
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockCustomRules(rules);
+#endif
+}
+
+- (void)_addAdBlockAllowlistHost:(NSString *)host
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->addAdBlockAllowlistHost(host);
+#endif
+}
+
+- (void)_removeAdBlockAllowlistHost:(NSString *)host
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->removeAdBlockAllowlistHost(host);
+#endif
+}
+
+- (void)_getAdBlockStateWithCompletionHandler:(void(^)(NSDictionary *))completionHandler
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->adBlockState([completionHandler = makeBlockPtr(completionHandler)](String stateJSON) {
+        RetainPtr data = [stateJSON.createNSString() dataUsingEncoding:NSUTF8StringEncoding];
+        id object = data ? [NSJSONSerialization JSONObjectWithData:data.get() options:0 error:nil] : nil;
+        completionHandler([object isKindOfClass:[NSDictionary class]] ? object : nil);
+    });
+#else
+    completionHandler(nil);
+#endif
+}
+
 - (NSString *)_thirdPartyCookieBlockingModeForTesting
 {
     switch (protect(*_websiteDataStore)->thirdPartyCookieBlockingMode()) {

@@ -57,6 +57,7 @@ typedef NS_ENUM(NSInteger, AttachmentElementEnabledState) {
 @property (nonatomic, readonly) BOOL acceleratedDrawingEnabled;
 @property (nonatomic, readonly) BOOL enhancedSecurityEnabled;
 @property (nonatomic, readonly) BOOL resourceLoadStatisticsEnabled;
+@property (nonatomic, readonly) BOOL adBlockEnabled;
 @property (nonatomic, readonly) BOOL largeImageAsyncDecodingEnabled;
 @property (nonatomic, readonly) BOOL animatedImageAsyncDecodingEnabled;
 @property (nonatomic, readonly) BOOL appleColorFilterEnabled;
