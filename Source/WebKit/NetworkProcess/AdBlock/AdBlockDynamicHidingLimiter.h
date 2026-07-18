@@ -59,7 +59,9 @@ public:
         auto now = MonotonicTime::now();
         pruneStaleEntries(now);
 
-        auto& budget = m_budgets.ensure(page, [] { return PageBudget { }; }).iterator->value;
+        auto& budget = m_budgets.ensure(page, [] {
+            return PageBudget { };
+        }).iterator->value;
         if (now - budget.windowStart > windowDuration) {
             budget.windowStart = now;
             budget.tokensInWindow = 0;
