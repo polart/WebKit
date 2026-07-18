@@ -95,9 +95,9 @@ enum AdBlockTest {
     ) async throws {
         let directory = uniqueDirectory()
 
-        var server = HTTPServer(protocol: .httpsProxy) {
-            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            Route("/ad.js") { "globalThis.__adLoaded = true;" }
+        var server = ProxyHTTPServer(protocol: .httpsProxy) {
+            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
         }
 
         try await server.run { serverConfiguration in
