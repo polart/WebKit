@@ -27,15 +27,16 @@
 // brave-core's `ad_block_service_browsertest.cc` network cases; see
 // `docs/adblock-brave-test-mapping.md` §3.
 //
-// Scope note: the Swift `HTTPServer` wrapper only serves 200 string bodies — it
-// exposes no status codes/redirects and no WebSocket endpoint. So the doc's
-// `redirectHopReEvaluated`, `blocksWebSocketOpen`, `blocksServiceWorkerRequest`,
-// and `blocksAboutBlankSubresource` scenarios are intentionally *not* covered
-// here: they need harness capabilities that don't exist yet (a redirect/status
-// route, a WS route, and a service-worker-friendly fixture server). They remain
-// required by the plan and should land once the harness grows those probes.
-// The redirect re-entry path (R1) is still covered structurally — the hook sits
-// on `checkRequest`, which redirects re-enter — but not asserted end-to-end here.
+// Scope note: `redirectHopReEvaluated` is covered here via `ProxyRoute.redirect`
+// (the project-owned `ProxyHTTPServer` wrapper, which extends the upstream test
+// server with status codes, response headers, and redirects without patching
+// WebKit's own files). Still deferred: `blocksWebSocketOpen` — `ProxyHTTPServer`
+// now exposes a WebSocket handshake server (`init(webSocketProtocol:)`), but the
+// test itself and its end-to-end verification are not written yet;
+// `blocksServiceWorkerRequest` needs a service-worker registration fixture; and
+// `blocksAboutBlankSubresource` is a client-side fixture that first needs a
+// correctness check on how `NetworkLoadChecker` sees the top origin for an
+// `about:blank` frame. All three remain required by the plan.
 
 #if ENABLE_SWIFTUI && ENABLE_CXX_INTEROP
 
@@ -71,7 +72,8 @@ struct AdBlockNetworkBlockingTests {
             store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, _ in
             // Prove the engine is live (the matching host is blocked)…
-            #expect(try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) })
+            let live = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
+            #expect(live)
 
             // …then a non-matching host on the same served path still loads.
             // `cdn.example.com` reuses the `/ad.js` route, so a rejection here
@@ -91,10 +93,12 @@ struct AdBlockNetworkBlockingTests {
         } body: { page, store in
             // First observe the block so we know the engine is built and blocking,
             // then add the exception and observe it un-block after the rebuild.
-            #expect(try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) })
+            let blocked = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
+            #expect(blocked)
 
             store._setAdBlockCustomRules("\(AdBlockTest.blockAdsRule)\n@@||ads.example.com^\n")
-            #expect(try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) })
+            let unblocked = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
+            #expect(unblocked)
         }
     }
 
@@ -106,11 +110,11 @@ struct AdBlockNetworkBlockingTests {
 
         // `tracker.com` and `example.com` are distinct registrable domains, so a
         // load of `tracker.com` is third-party from `example.com` and first-party
-        // from `tracker.com`. HTTPServer matches by path only, so both top
+        // from `tracker.com`. ProxyHTTPServer matches by path only, so both top
         // documents share the `/index` route and both fetch the `/t.js` route.
-        var server = HTTPServer(protocol: .httpsProxy) {
-            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            Route("/t.js") { "globalThis.__t = true;" }
+        var server = ProxyHTTPServer(protocol: .httpsProxy) {
+            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            ProxyRoute("/t.js") { "globalThis.__t = true;" }
         }
 
         try await server.run { serverConfiguration in
@@ -124,19 +128,17 @@ struct AdBlockNetworkBlockingTests {
 
             // Cross-site: example.com → tracker.com is third-party → blocked.
             try await page.load(URL(string: "https://example.com/index")).wait()
-            #expect(
-                try await AdBlockTest.pollUntil {
-                    try await AdBlockTest.subresourceBlocked(page, url: "https://tracker.com/t.js")
-                }
-            )
+            let crossSiteBlocked = try await AdBlockTest.pollUntil {
+                try await AdBlockTest.subresourceBlocked(page, url: "https://tracker.com/t.js")
+            }
+            #expect(crossSiteBlocked)
 
             // Same-site: tracker.com → tracker.com is first-party → allowed.
             try await page.load(URL(string: "https://tracker.com/index")).wait()
-            #expect(
-                try await AdBlockTest.pollUntil {
-                    !(try await AdBlockTest.subresourceBlocked(page, url: "https://tracker.com/t.js"))
-                }
-            )
+            let sameSiteAllowed = try await AdBlockTest.pollUntil {
+                !(try await AdBlockTest.subresourceBlocked(page, url: "https://tracker.com/t.js"))
+            }
+            #expect(sameSiteAllowed)
         }
     }
 
@@ -163,10 +165,10 @@ struct AdBlockNetworkBlockingTests {
             </script></body></html>
             """
 
-        var server = HTTPServer(protocol: .httpsProxy) {
-            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            Route("/frame") { frameHTML }
-            Route("/ad.js") { "globalThis.__adLoaded = true;" }
+        var server = ProxyHTTPServer(protocol: .httpsProxy) {
+            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            ProxyRoute("/frame") { frameHTML }
+            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
         }
 
         try await server.run { serverConfiguration in
@@ -184,6 +186,48 @@ struct AdBlockNetworkBlockingTests {
         }
     }
 
+    // MARK: A redirect hop is re-evaluated against the engine (R1)
+
+    @Test
+    func redirectHopReEvaluated() async throws {
+        let directory = AdBlockTest.uniqueDirectory()
+
+        // Both redirect endpoints live on an un-blocked host and 302 to the same
+        // `/ad.js` route; only the *target host* differs. ProxyHTTPServer matches
+        // by path, so the block decision can only come from re-checking the redirect
+        // hop's destination, not the initial (allowed) request URL.
+        var server = ProxyHTTPServer(protocol: .httpsProxy) {
+            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
+            ProxyRoute.redirect("/to-blocked", to: "https://ads.example.com/ad.js")
+            ProxyRoute.redirect("/to-allowed", to: "https://cdn.example.com/ad.js")
+        }
+
+        try await server.run { serverConfiguration in
+            let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+
+            var configuration = WebPage.Configuration()
+            configuration.websiteDataStore = store
+            let page = WebPage(configuration: configuration, navigationDecider: AdBlockNavigationDecider())
+            try await page.load(URL(string: "https://example.com/index")).wait()
+
+            // Allowed initial request → 302 → blocked target: cancelled at the hop.
+            let redirectToBlocked = try await AdBlockTest.pollUntil {
+                try await AdBlockTest.subresourceBlocked(page, url: "https://safe.example.com/to-blocked")
+            }
+            #expect(redirectToBlocked)
+
+            // Same redirect shape to an allowed target still loads, proving it is
+            // the hop's destination — not the redirect itself — that is blocked.
+            let redirectToAllowed = try await AdBlockTest.pollUntil {
+                !(try await AdBlockTest.subresourceBlocked(page, url: "https://safe.example.com/to-allowed"))
+            }
+            #expect(redirectToAllowed)
+        }
+    }
+
     // MARK: Regression pin — the subresource path actually blocks and toggles
 
     // Pins the 2026-07-17 "move the request once" fix: a moved-from
@@ -198,10 +242,12 @@ struct AdBlockNetworkBlockingTests {
             store._setAdBlockEnabled(true)
             store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, store in
-            #expect(try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) })
+            let blocked = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
+            #expect(blocked)
 
             store._setAdBlockCustomRules("")
-            #expect(try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) })
+            let unblocked = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
+            #expect(unblocked)
         }
     }
 
