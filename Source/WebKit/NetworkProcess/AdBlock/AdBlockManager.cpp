@@ -200,7 +200,7 @@ bool AdBlockManager::isAllowlistedHost(const String& host) const
 
 void AdBlockManager::checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(AdBlockEngine::CheckResult)>&& completion)
 {
-    if (isAllowlistedHost(hostname)) {
+    if (!isEnabled() || isAllowlistedHost(hostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
             completion(AdBlockEngine::CheckResult { });
         });
@@ -222,7 +222,7 @@ void AdBlockManager::checkRequest(const String& url, const String& hostname, con
 
 void AdBlockManager::cspAndCosmeticResources(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String, AdBlockCosmeticResources)>&& completion)
 {
-    if (isAllowlistedHost(hostname)) {
+    if (!isEnabled() || isAllowlistedHost(hostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
             completion(String { }, AdBlockCosmeticResources { });
         });
@@ -253,7 +253,7 @@ void AdBlockManager::cspAndCosmeticResources(const String& url, const String& ho
 
 void AdBlockManager::hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& hostname, CompletionHandler<void(Vector<String>)>&& completion)
 {
-    if (isAllowlistedHost(hostname)) {
+    if (!isEnabled() || isAllowlistedHost(hostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
             completion(Vector<String> { });
         });

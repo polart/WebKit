@@ -176,6 +176,28 @@ typedef NS_OPTIONS(NSUInteger, _WKWebsiteDataStoreFetchOptions) {
 - (void)_installMockParentalControlsURLFilterForTestingWithBlockedURLs:(NSArray<NSURL *> *)blockedURLs completionHandler:(void(^)(void))completionHandler WK_API_AVAILABLE(macos(27.0), ios(27.0));
 - (void)_installMockParentalControlsURLFilterForTestingWithBlockedURLs:(NSArray<NSURL *> *)blockedURLs replacementData:(NSData * _Nullable)replacementData completionHandler:(void(^)(void))completionHandler WK_API_AVAILABLE(macos(27.0), ios(27.0));
 
+// Adblock embedder API. Master toggle, filter-list subscription management,
+// custom rules, and per-site allowlist. Config is persisted per data store in
+// the NetworkProcess; -_getAdBlockStateWithCompletionHandler: reads it back as a
+// JSON object ({ enabled, customRules, allowlist:[…], subscriptions:[{ url,
+// enabled, title, lastFetched }] }).
+//
+// Scope caveat: while each data store persists its own config, the underlying
+// filter engine and its enable/allowlist gate are process-global — one engine
+// per NetworkProcess, shared by every data store in that process. So
+// enabling/disabling or editing the allowlist on one data store affects all
+// sessions in the same NetworkProcess, last-writer-wins. Non-persistent
+// (ephemeral) data stores keep no config and these calls are no-ops for them.
+- (void)_setAdBlockEnabled:(BOOL)enabled;
+- (void)_addAdBlockSubscriptionWithURL:(NSURL *)url expectedHash:(NSString *)expectedHash;
+- (void)_removeAdBlockSubscriptionWithURL:(NSURL *)url;
+- (void)_setAdBlockSubscriptionWithURL:(NSURL *)url enabled:(BOOL)enabled;
+- (void)_refreshAdBlockSubscriptions;
+- (void)_setAdBlockCustomRules:(NSString *)rules;
+- (void)_addAdBlockAllowlistHost:(NSString *)host;
+- (void)_removeAdBlockAllowlistHost:(NSString *)host;
+- (void)_getAdBlockStateWithCompletionHandler:(void(^)(NSDictionary *))completionHandler;
+
 @end
 
 NS_ASSUME_NONNULL_END

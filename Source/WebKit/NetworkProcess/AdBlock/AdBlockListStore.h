@@ -49,9 +49,21 @@ public:
         double lastFetched { 0 }; // WallTime seconds since epoch; 0 == never fetched.
     };
 
-    // Reads persisted config, pushes the allowlist to the manager, and restores
-    // the engine: warm `.dat` fast path, else re-parse the stored list texts.
+    // Reads persisted config, pushes the allowlist + master enable state to the
+    // manager, and restores the engine: warm `.dat` fast path, else re-parse the
+    // stored list texts.
     void load(CompletionHandler<void()>&& = [] { });
+
+    // Master enable gate (persisted, mirrored into the manager). Off by default;
+    // toggling keeps the compiled engine warm (AdBlockManager::setEnabled).
+    void setEnabled(bool);
+    bool enabled() const { return m_enabled; }
+
+    // A JSON snapshot of the whole config for the embedder API read-back
+    // (subscriptions, allowlist, custom rules, enable state), so a re-instantiated
+    // data store can read persisted state straight from the loaded store without a
+    // new serializable IPC type.
+    String stateJSON() const;
 
     // Downloads the list over HTTPS, verifies it against the pinned hash (if any),
     // stores its text, and rebuilds. completion(false) on any download/verify
@@ -118,6 +130,7 @@ private:
     HashSet<String> m_allowlist;
     String m_resourcesJSON;
 
+    bool m_enabled { false };
     bool m_rebuildScheduled { false };
 };
 

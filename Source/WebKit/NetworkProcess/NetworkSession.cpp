@@ -26,6 +26,9 @@
 #include "config.h"
 #include "NetworkSession.h"
 
+#if ENABLE(ADBLOCK)
+#include "AdBlock/AdBlockListStore.h"
+#endif
 #include "BackgroundFetchLoad.h"
 #include "BackgroundFetchState.h"
 #include "BackgroundFetchStoreImpl.h"
@@ -67,6 +70,7 @@
 #include <WebCore/SharedBuffer.h>
 #include <numeric>
 #include <wtf/Borrow.h>
+#include <wtf/FileSystem.h>
 #include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -237,6 +241,9 @@ static WebPushD::WebPushDaemonConnectionConfiguration configurationWithHostAudit
 NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSessionCreationParameters& parameters)
     : m_sessionID(parameters.sessionID)
     , m_networkProcess(networkProcess)
+#if ENABLE(ADBLOCK)
+    , m_adBlockStorageDirectory(parameters.generalStorageDirectory.isEmpty() ? String { } : FileSystem::pathByAppendingComponent(parameters.generalStorageDirectory, "AdBlock"_s))
+#endif
     , m_resourceLoadStatisticsDirectory(parameters.resourceLoadStatisticsParameters.directory)
     , m_shouldIncludeLocalhostInResourceLoadStatistics(parameters.resourceLoadStatisticsParameters.shouldIncludeLocalhost ? ShouldIncludeLocalhost::Yes : ShouldIncludeLocalhost::No)
     , m_enableResourceLoadStatisticsDebugMode(parameters.resourceLoadStatisticsParameters.enableDebugMode ? EnableResourceLoadStatisticsDebugMode::Yes : EnableResourceLoadStatisticsDebugMode::No)
@@ -393,6 +400,28 @@ WebCore::IPAddressSpace NetworkSession::classifyConnectionAddressSpace(const std
 
     return WebCore::classifyIPAddressSpace(*resolvedIPAddress);
 }
+
+#if ENABLE(ADBLOCK)
+AdBlockListStore* NetworkSession::ensureAdBlockListStore()
+{
+    // Ephemeral / non-persistent sessions have no on-disk storage directory.
+    // They share the process-wide engine, so building and persisting a
+    // per-session config for them is both wasteful and wrong: with an empty
+    // directory the store's paths resolve to the filesystem root, and load()
+    // would rebuild (clobbering) the shared engine from an empty list set.
+    // Return null so the embedder-API handlers no-op for such sessions.
+    if (m_adBlockStorageDirectory.isEmpty())
+        return nullptr;
+
+    if (!m_adBlockListStore) {
+        m_adBlockListStore = AdBlockListStore::create(m_networkProcess, m_sessionID, m_adBlockStorageDirectory);
+        // Restore persisted config + warm the engine so blocking is active on
+        // relaunch (and the master enable state is mirrored into the manager).
+        m_adBlockListStore->load();
+    }
+    return m_adBlockListStore.get();
+}
+#endif
 
 void NetworkSession::destroyResourceLoadStatistics(CompletionHandler<void()>&& completionHandler)
 {
