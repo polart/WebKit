@@ -2077,27 +2077,18 @@ void NetworkConnectionToWebProcess::takeInvalidMessageStringForTesting(Completio
 #endif
 
 #if ENABLE(ADBLOCK)
-void NetworkConnectionToWebProcess::hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>)>&& completionHandler)
+void NetworkConnectionToWebProcess::hiddenClassIdSelectors(WebPageProxyIdentifier pageID, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>)>&& completionHandler)
 {
-    // Bound how many tokens one web process can push through the shared engine in a
-    // window. Legitimate pages are de-duplicated and batched web-process-side and
-    // stay far under this; the cap only trips on a hostile or runaway process, which
-    // then gets pass-through (empty) replies until the window rolls over.
-    static constexpr unsigned maxTokensPerWindow = 10000;
-    static constexpr Seconds windowDuration = 10_s;
-
-    auto now = MonotonicTime::now();
-    if (now - m_adBlockDynamicWindowStart > windowDuration) {
-        m_adBlockDynamicWindowStart = now;
-        m_adBlockDynamicTokensInWindow = 0;
-        m_adBlockDynamicWindowLogged = false;
-    }
-    m_adBlockDynamicTokensInWindow += classes.size() + ids.size();
-    if (m_adBlockDynamicTokensInWindow > maxTokensPerWindow) {
-        if (!m_adBlockDynamicWindowLogged) {
-            CONNECTION_RELEASE_LOG_ERROR(Network, "hiddenClassIdSelectors: dynamic-hiding token budget exceeded, throttling queries for this window");
-            m_adBlockDynamicWindowLogged = true;
-        }
+    // Rate-limit the query before it reaches the shared engine. The policy lives in
+    // the AdBlock component: it caps the per-message exceptions vector (the engine
+    // deep-copies and FFI-marshals it) and counts classes + ids + exceptions against
+    // a per-page window, so a hostile or runaway process cannot bypass the budget via
+    // a large exceptions set, and one page cannot starve dynamic hiding for others on
+    // this connection. A throttled query gets a pass-through (empty) reply.
+    bool shouldLog = false;
+    if (!m_adBlockDynamicHidingLimiter.allowQuery(pageID, classes.size(), ids.size(), exceptions.size(), shouldLog)) {
+        if (shouldLog)
+            CONNECTION_RELEASE_LOG_ERROR(Network, "hiddenClassIdSelectors: dynamic-hiding token budget exceeded for page, throttling queries for this window");
         return completionHandler({ });
     }
 

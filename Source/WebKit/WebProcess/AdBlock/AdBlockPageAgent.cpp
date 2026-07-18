@@ -249,13 +249,20 @@ void AdBlockPageAgent::reportDynamicTokens(WebFrame& webFrame, Vector<String>&& 
     RefPtr document = coreFrame->document();
     if (!document)
         return;
+    RefPtr webPage = webFrame.page();
+    if (!webPage)
+        return;
 
     auto hostname = document->url().host().toString();
     auto exceptions = state.exceptions;
 
+    // Key the NetworkProcess-side rate limiter per page (see AdBlockDynamicHidingLimiter),
+    // so one busy page cannot exhaust the budget for the others sharing this connection.
+    auto pageID = webPage->webPageProxyIdentifier();
+
     Ref protectedFrame { webFrame };
     WeakPtr weakDocument { *document };
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::HiddenClassIdSelectors(WTF::move(newClasses), WTF::move(newIds), WTF::move(exceptions), hostname), [weakThis = WeakPtr { *this }, frameID, protectedFrame = WTF::move(protectedFrame), weakDocument = WTF::move(weakDocument)](Vector<String>&& selectors) mutable {
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::HiddenClassIdSelectors(pageID, WTF::move(newClasses), WTF::move(newIds), WTF::move(exceptions), hostname), [weakThis = WeakPtr { *this }, frameID, protectedFrame = WTF::move(protectedFrame), weakDocument = WTF::move(weakDocument)](Vector<String>&& selectors) mutable {
         if (!weakThis || selectors.isEmpty())
             return;
         // Drop the reply if the frame navigated away: the state was cleared, or the
