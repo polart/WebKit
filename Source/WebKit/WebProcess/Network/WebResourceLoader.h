@@ -112,7 +112,7 @@ private:
     void drainPendingStreamIfPossible();
 
 #if ENABLE(ADBLOCK)
-    void setAdBlockCosmeticResources(Vector<String>&& hideSelectors, Vector<String>&& exceptions, String&& injectedScript, bool generichide);
+    void setAdBlockCosmeticResources(Vector<String>&& hideSelectors, Vector<String>&& exceptions, String&& injectedScript, bool generichide, bool dynamicHidingEnabled);
 #endif
 
     WebCore::MainFrameMainResource mainFrameMainResource() const;
