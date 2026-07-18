@@ -18,10 +18,10 @@
 #include "NetworkDataTask.h"
 #include <optional>
 #include <wtf/CompletionHandler.h>
-#include <wtf/URL.h>
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 
