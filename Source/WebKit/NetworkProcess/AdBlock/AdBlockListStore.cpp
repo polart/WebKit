@@ -377,7 +377,13 @@ Vector<String> AdBlockListStore::allowlistedHosts() const
 
 void AdBlockListStore::setResources(String resourcesJSON)
 {
+    if (m_resourcesJSON == resourcesJSON)
+        return;
     m_resourcesJSON = WTF::move(resourcesJSON);
+    // The resource library is not persisted (it is a bundled/embedder-supplied
+    // asset, re-set on every launch), but the live engine must pick it up so
+    // `+js(...)` rules can resolve their scriptlet bodies. Rebuild in place.
+    scheduleRebuild();
 }
 
 void AdBlockListStore::setEnabled(bool enabled)

@@ -1475,6 +1475,14 @@ void NetworkProcess::setAdBlockCustomRules(PAL::SessionID sessionID, String&& ru
     }
 }
 
+void NetworkProcess::setAdBlockResources(PAL::SessionID sessionID, String&& resourcesJSON)
+{
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setResources(WTF::move(resourcesJSON));
+    }
+}
+
 void NetworkProcess::addAdBlockAllowlistHost(PAL::SessionID sessionID, String&& host)
 {
     if (CheckedPtr session = networkSession(sessionID)) {

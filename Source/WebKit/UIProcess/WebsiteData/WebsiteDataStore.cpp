@@ -2061,6 +2061,11 @@ void WebsiteDataStore::setAdBlockCustomRules(const String& rules)
     protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockCustomRules(m_sessionID, rules), 0);
 }
 
+void WebsiteDataStore::setAdBlockResources(const String& resourcesJSON)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockResources(m_sessionID, resourcesJSON), 0);
+}
+
 void WebsiteDataStore::addAdBlockAllowlistHost(const String& host)
 {
     protect(networkProcess())->send(Messages::NetworkProcess::AddAdBlockAllowlistHost(m_sessionID, host), 0);

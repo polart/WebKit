@@ -198,6 +198,7 @@ public:
     void setAdBlockSubscriptionEnabled(const URL&, bool);
     void refreshAdBlockSubscriptions();
     void setAdBlockCustomRules(const String&);
+    void setAdBlockResources(const String&);
     void addAdBlockAllowlistHost(const String&);
     void removeAdBlockAllowlistHost(const String&);
     void adBlockState(CompletionHandler<void(String)>&&);

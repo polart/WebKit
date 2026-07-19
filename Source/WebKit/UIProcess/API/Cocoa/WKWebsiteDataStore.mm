@@ -1694,6 +1694,13 @@ struct WKWebsiteData {
 #endif
 }
 
+- (void)_setAdBlockResources:(NSString *)resourcesJSON
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockResources(resourcesJSON);
+#endif
+}
+
 - (void)_addAdBlockAllowlistHost:(NSString *)host
 {
 #if ENABLE(ADBLOCK)
