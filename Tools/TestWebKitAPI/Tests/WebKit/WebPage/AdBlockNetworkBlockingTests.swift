@@ -31,11 +31,25 @@
 // and `blocksWebSocketOpen` via `ProxyHTTPServer`'s WebSocket handshake server
 // (`init(webSocketProtocol:)`) — both extend the project-owned `ProxyHTTPServer`
 // wrapper (status codes, response headers, redirects, WebSocket handshakes)
-// without patching WebKit's own files. Still deferred: `blocksServiceWorkerRequest`
-// needs a service-worker registration fixture; and `blocksAboutBlankSubresource`
-// is a client-side fixture that first needs a correctness check on how
-// `NetworkLoadChecker` sees the top origin for an `about:blank` frame. Both remain
-// required by the plan.
+// without patching WebKit's own files. Two cases remain deferred, both still
+// required by the plan:
+//
+//  - `blocksServiceWorkerRequest`: the U4 hook already covers it — `NetworkLoadChecker`
+//    is created unconditionally for every `NetworkResourceLoader`, through which a
+//    service worker's `fetch()` subresource loads pass. The blocker is the *test
+//    harness*, not the product: a registered worker holds a proxy CONNECT tunnel
+//    that WebKit resets when the worker process shuts down at teardown, and the
+//    shared `HTTPServer` hard-asserts (`Connection::terminate`, `!error`) that every
+//    tracked connection closed without error (`terminateAllConnections`). Plain
+//    page-fetch blocks never open a second lingering tunnel, so they pass; the SW
+//    tunnel reset trips the debug assertion and crashes the run. `skipWaiting`/
+//    `clients.claim()` + an explicit `unregister()` before teardown did not avoid
+//    the reset. Getting it green needs upstream test-infra changes (tolerating an
+//    errored connection at teardown), which conflicts with keeping WebKit's own
+//    files pristine — revisit if that constraint is relaxed.
+//  - `blocksAboutBlankSubresource`: a client-side fixture that first needs a
+//    correctness check on how `NetworkLoadChecker` sees the top origin for an
+//    `about:blank` frame.
 
 #if ENABLE_SWIFTUI && ENABLE_CXX_INTEROP
 
