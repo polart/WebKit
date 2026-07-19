@@ -146,18 +146,20 @@ HTTPServer::HTTPServer(
     }
 }
 
-HTTPServer::HTTPServer(Function<void(Connection)>&& connectionHandler, Protocol protocol)
+HTTPServer::HTTPServer(Function<void(Connection)>&& connectionHandler, Protocol protocol, DeferListening deferListening)
     : m_protocol(protocol)
 {
     m_serverBridge = adoptNS([[HTTPServerBridge alloc] initWithProtocol:static_cast<HTTPServerProtocolBridge>(protocol) connectionHandler:makeBlockPtr([connectionHandler = WTF::move(connectionHandler)](nw_connection_t connection) mutable {
         connectionHandler(Connection(connection));
     }).get()]);
 
-    bool done = false;
-    startListening([&] {
-        done = true;
-    });
-    Util::run(&done);
+    if (deferListening == DeferListening::No) {
+        bool done = false;
+        startListening([&] {
+            done = true;
+        });
+        Util::run(&done);
+    }
 }
 
 HTTPServer::HTTPServer(UseCoroutines, Function<ConnectionTask(Connection)>&& connectionHandler, Protocol protocol)

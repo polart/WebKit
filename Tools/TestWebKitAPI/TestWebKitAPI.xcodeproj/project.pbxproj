@@ -571,6 +571,12 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				WebCore/cocoa/ScrollAnimationSmoothTests.swift,
+				WebKit/WebPage/AdBlockAPITests.swift,
+				WebKit/WebPage/AdBlockCSPTests.swift,
+				WebKit/WebPage/AdBlockCosmeticTests.swift,
+				WebKit/WebPage/AdBlockNetworkBlockingTests.swift,
+				WebKit/WebPage/AdBlockScriptletTests.swift,
+				WebKit/WebPage/AdBlockTestSupport.swift,
 				"WebKit/WebPage/AppKit Gesture Tests/AppKitGesturesTestsSupport.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/BasicAppKitGesturesTests.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/DoubleClickGesturesTests.swift",
@@ -678,6 +684,8 @@
 				cocoa/MiniTURNServer.mm,
 				cocoa/PDFTestHelpers.swift,
 				cocoa/SafeBrowsingTestUtilities.swift,
+				cocoa/ProxyHTTPServer.mm,
+				cocoa/ProxyHTTPServer.swift,
 				cocoa/SiteIsolationTestUtilities.swift,
 				cocoa/StdLibExtras.swift,
 				"cocoa/SwiftUI+Extras.swift",
@@ -1480,6 +1488,12 @@
 		07C913DE2F820CCA003A09D8 /* Exceptions for "Tests" folder in "TestWebKitAPIBundle" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				WebKit/WebPage/AdBlockAPITests.swift,
+				WebKit/WebPage/AdBlockCSPTests.swift,
+				WebKit/WebPage/AdBlockCosmeticTests.swift,
+				WebKit/WebPage/AdBlockNetworkBlockingTests.swift,
+				WebKit/WebPage/AdBlockScriptletTests.swift,
+				WebKit/WebPage/AdBlockTestSupport.swift,
 				"WebKit/WebPage/AppKit Gesture Tests/AppKitGesturesTestsSupport.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/BasicAppKitGesturesTests.swift",
 				"WebKit/WebPage/AppKit Gesture Tests/DoubleClickGesturesTests.swift",

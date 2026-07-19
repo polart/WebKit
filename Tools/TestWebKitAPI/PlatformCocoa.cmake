@@ -312,6 +312,7 @@ list(APPEND TestWebKit_SOURCES
 
     Helpers/cocoa/HTTPServer.mm
     Helpers/cocoa/MiniTURNServer.mm
+    Helpers/cocoa/ProxyHTTPServer.mm
     Helpers/cocoa/TestCocoaImageAndCocoaColor.mm
     Helpers/cocoa/TestElementFullscreenDelegate.mm
     Helpers/cocoa/TestNSBundleExtras.m
