@@ -38,7 +38,10 @@ void proxyAddHTTPResponseHeaderField(TestWebKitAPI::HTTPResponse& response, cons
 
 TestWebKitAPI::HTTPServer proxyMakeWebSocketHTTPServer(TestWebKitAPI::HTTPServer::Protocol protocol)
 {
+    // Defer listening so the Swift wrapper starts the listener from `run()` on the
+    // main actor; see ProxyHTTPServer.swift for why the listening (blocking)
+    // constructor cannot be used from a Swift-concurrency @MainActor test.
     return TestWebKitAPI::HTTPServer([](TestWebKitAPI::Connection connection) {
         connection.webSocketHandshake();
-    }, protocol);
+    }, protocol, TestWebKitAPI::HTTPServer::DeferListening::Yes);
 }
