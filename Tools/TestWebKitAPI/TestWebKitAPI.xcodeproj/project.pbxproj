@@ -566,6 +566,7 @@
 			membershipExceptions = (
 				WebKit/WebPage/AdBlockAPITests.swift,
 				WebKit/WebPage/AdBlockCSPTests.swift,
+				WebKit/WebPage/AdBlockCosmeticTests.swift,
 				WebKit/WebPage/AdBlockNetworkBlockingTests.swift,
 				WebKit/WebPage/AdBlockTestSupport.swift,
 				"WebKit/WebPage/AppKit Gesture Tests/AppKitGesturesTestsSupport.swift",
@@ -1403,6 +1404,7 @@
 			membershipExceptions = (
 				WebKit/WebPage/AdBlockAPITests.swift,
 				WebKit/WebPage/AdBlockCSPTests.swift,
+				WebKit/WebPage/AdBlockCosmeticTests.swift,
 				WebKit/WebPage/AdBlockNetworkBlockingTests.swift,
 				WebKit/WebPage/AdBlockTestSupport.swift,
 				"WebKit/WebPage/AppKit Gesture Tests/AppKitGesturesTestsSupport.swift",
