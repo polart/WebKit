@@ -187,6 +187,7 @@ typedef NS_OPTIONS(NSUInteger, _WKWebsiteDataStoreFetchOptions) {
 - (void)_setAdBlockSubscriptionWithURL:(NSURL *)url enabled:(BOOL)enabled;
 - (void)_refreshAdBlockSubscriptions;
 - (void)_setAdBlockCustomRules:(NSString *)rules;
+- (void)_setAdBlockResources:(NSString *)resourcesJSON;
 - (void)_addAdBlockAllowlistHost:(NSString *)host;
 - (void)_removeAdBlockAllowlistHost:(NSString *)host;
 - (void)_getAdBlockStateWithCompletionHandler:(void(^)(NSDictionary *))completionHandler;
