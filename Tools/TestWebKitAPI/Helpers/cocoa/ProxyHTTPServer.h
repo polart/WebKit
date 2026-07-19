@@ -51,8 +51,10 @@ void proxyAddHTTPResponseHeaderField(TestWebKitAPI::HTTPResponse&, const WTF::St
 // `Connection::webSocketHandshake` helper (the same pattern as
 // `Tests/WebKit/WKWebView/WebSocket.mm`). Because it upgrades *every* connection,
 // a WebSocket server is standalone — pages/subresources are served by a separate
-// route-based `ProxyHTTPServer`. Unlike the route constructor this one begins
-// listening immediately, so the Swift wrapper does not defer listening for it.
+// route-based `ProxyHTTPServer`. Listening is deferred (`DeferListening::Yes`) so
+// the Swift wrapper starts the listener from `run()` on the main actor, the same
+// as the route constructor; see `ProxyHTTPServer.swift` for why a synchronously
+// listening constructor cannot be used from a Swift-concurrency @MainActor test.
 TestWebKitAPI::HTTPServer proxyMakeWebSocketHTTPServer(TestWebKitAPI::HTTPServer::Protocol);
 
 #endif // __cplusplus

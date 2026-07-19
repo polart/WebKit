@@ -28,15 +28,14 @@
 // `docs/adblock-brave-test-mapping.md` §3.
 //
 // Scope note: `redirectHopReEvaluated` is covered here via `ProxyRoute.redirect`
-// (the project-owned `ProxyHTTPServer` wrapper, which extends the upstream test
-// server with status codes, response headers, and redirects without patching
-// WebKit's own files). Still deferred: `blocksWebSocketOpen` — `ProxyHTTPServer`
-// now exposes a WebSocket handshake server (`init(webSocketProtocol:)`), but the
-// test itself and its end-to-end verification are not written yet;
-// `blocksServiceWorkerRequest` needs a service-worker registration fixture; and
-// `blocksAboutBlankSubresource` is a client-side fixture that first needs a
-// correctness check on how `NetworkLoadChecker` sees the top origin for an
-// `about:blank` frame. All three remain required by the plan.
+// and `blocksWebSocketOpen` via `ProxyHTTPServer`'s WebSocket handshake server
+// (`init(webSocketProtocol:)`) — both extend the project-owned `ProxyHTTPServer`
+// wrapper (status codes, response headers, redirects, WebSocket handshakes)
+// without patching WebKit's own files. Still deferred: `blocksServiceWorkerRequest`
+// needs a service-worker registration fixture; and `blocksAboutBlankSubresource`
+// is a client-side fixture that first needs a correctness check on how
+// `NetworkLoadChecker` sees the top origin for an `about:blank` frame. Both remain
+// required by the plan.
 
 #if ENABLE_SWIFTUI && ENABLE_CXX_INTEROP
 
@@ -266,6 +265,45 @@ struct AdBlockNetworkBlockingTests {
             #expect(!blocked)
         }
     }
+
+    // MARK: A WebSocket to a matching host fails to open (R1)
+
+    // Pins the `NetworkSocketChannel` hook: a matching WebSocket handshake is
+    // refused before it opens, a non-matching one connects. The probe talks to a
+    // standalone WSS handshake server *directly* (no proxy), and the rule targets
+    // that server's own host, so the very endpoint that is blocked here is the one
+    // that must open once the rule is cleared — a positive control that rules out
+    // a generic (non-adblock) connection failure reading as a false "blocked".
+    @Test
+    func blocksWebSocketOpen() async throws {
+        let directory = AdBlockTest.uniqueDirectory()
+
+        var server = ProxyHTTPServer(webSocketProtocol: .http)
+
+        try await server.run { serverConfiguration in
+            let webSocketURL = "ws://127.0.0.1:\(serverConfiguration.port)/"
+
+            let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: nil)
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules("||127.0.0.1^")
+
+            var configuration = WebPage.Configuration()
+            configuration.websiteDataStore = store
+            let page = WebPage(configuration: configuration, navigationDecider: AdBlockNavigationDecider())
+            try await page.load(html: "<!DOCTYPE html><html><body></body></html>").wait()
+
+            // Matching host: the handshake is refused before the socket opens.
+            let blocked = try await AdBlockTest.pollUntil { try await webSocketBlocked(page, url: webSocketURL) }
+            #expect(blocked)
+
+            // Clearing the rule lets the very same endpoint open — a positive
+            // control that rules out a generic (non-adblock) connection failure
+            // reading as a false "blocked".
+            store._setAdBlockCustomRules("")
+            let opens = try await AdBlockTest.pollUntil { !(try await webSocketBlocked(page, url: webSocketURL)) }
+            #expect(opens)
+        }
+    }
 }
 
 // MARK: - Helpers
@@ -292,6 +330,36 @@ extension AdBlockNetworkBlockingTests {
             });
             """
         )
+        return (result as? Bool) ?? false
+    }
+
+    // True when a fresh WebSocket to `url` never opens (the NetworkProcess refuses
+    // the handshake), false when it opens. A fresh socket per call re-checks the
+    // live engine; the timeout keeps a stalled connection from hanging the poll.
+    @MainActor
+    fileprivate func webSocketBlocked(_ page: WebPage, url: String) async throws -> Bool {
+        let result = try await page.callJavaScript(
+            """
+            return await new Promise((resolve) => {
+                let done = false;
+                const finish = (blocked) => { if (!done) { done = true; resolve(blocked); } };
+                let ws;
+                try {
+                    ws = new WebSocket("\(url)");
+                } catch (e) {
+                    finish(true);
+                    return;
+                }
+                ws.onopen = () => { finish(false); ws.close(); };
+                ws.onerror = () => finish(true);
+                ws.onclose = () => finish(true);
+                setTimeout(() => finish(true), 3000);
+            });
+            """
+        )
+        // Fail open: a non-Bool result means the probe itself failed to run
+        // (not that the socket was blocked), so default to "not blocked" and let
+        // the assertion surface a broken probe rather than silently confirm it.
         return (result as? Bool) ?? false
     }
 }

@@ -39,10 +39,11 @@ private import TestWebKitAPILibrary.Helpers.cocoa.HTTPServer
 private import TestWebKitAPILibrary.Helpers.cocoa.ProxyHTTPServer
 import struct Swift.String
 
-/// A description of an HTTP server route with a path and a response. Mirrors the
-/// upstream `Route`, adding a status code, response headers, and redirect
-/// convenience. Named `ProxyRoute` to avoid colliding with the upstream `Route`
-/// in the same test module.
+/// A description of an HTTP server route with a path and a response.
+///
+/// Mirrors the upstream `Route`, adding a status code, response headers, and
+/// redirect convenience. Named `ProxyRoute` to avoid colliding with the upstream
+/// `Route` in the same test module.
 public struct ProxyRoute: Sendable {
     fileprivate struct HeaderField: Sendable {
         let name: String
@@ -148,9 +149,9 @@ public struct ProxyHTTPServer: ~Copyable {
 
     private var storage: TestWebKitAPI.RefCountedHTTPServer
 
-    // The route constructor defers listening (so `run` can start it and observe
-    // the ready state); the WebSocket constructor begins listening immediately,
-    // so `run` must not start it a second time.
+    // Both constructors defer listening so `run` starts the listener and observes
+    // the ready state on the main actor. (This flag is retained so a future
+    // eagerly-listening server can opt out of `run` starting it a second time.)
     private let listensLazily: Bool
 
     /// Create a server from a group of routes.
@@ -184,10 +185,20 @@ public struct ProxyHTTPServer: ~Copyable {
     /// WebSockets — pages and subresources come from a separate route-based
     /// ``ProxyHTTPServer``.
     ///
-    /// - Parameter webSocketProtocol: The protocol to use for this server.
+    /// Like the route constructor, this defers listening: the underlying
+    /// WebSocket-capable `HTTPServer` is built without starting its listener, and
+    /// ``run(_:)`` starts it via `startListening`. This matters under Swift
+    /// concurrency because the listener reports readiness on the main dispatch
+    /// queue and WebKit's `CompletionHandler` asserts thread affinity — so the
+    /// readiness callback must be *created* on the main actor (in ``run(_:)``) and
+    /// delivered there while the actor is suspended at its `await`. A listening
+    /// constructor would either block the main actor (deadlock) or, if built off
+    /// the main actor, trip that thread assertion.
+    ///
+    /// - Parameter protocol: The protocol to use for this server.
     public init(webSocketProtocol protocol: `Protocol`) {
         unsafe self.storage = .init(consuming: proxyMakeWebSocketHTTPServer(.init(`protocol`)))
-        self.listensLazily = false
+        self.listensLazily = true
     }
 
     /// Calls the given closure after starting the server, and then closes the server once finished.

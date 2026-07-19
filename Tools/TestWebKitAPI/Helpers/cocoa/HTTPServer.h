@@ -77,7 +77,7 @@ public:
 
     HTTPServer(std::initializer_list<std::pair<String, HTTPResponse>>, Protocol = Protocol::Http, CertificateVerifier&& = nullptr, SecIdentityRef = nullptr, std::optional<uint16_t> port = { }, DeferListening = DeferListening::No);
     HTTPServer(ResponseMap&& responses, Protocol = Protocol::Http, CertificateVerifier&& = nullptr, SecIdentityRef = nullptr, std::optional<uint16_t> port = { }, DeferListening = DeferListening::No);
-    HTTPServer(Function<void(Connection)>&&, Protocol = Protocol::Http);
+    HTTPServer(Function<void(Connection)>&&, Protocol = Protocol::Http, DeferListening = DeferListening::No);
     enum class UseCoroutines : bool { Yes };
     HTTPServer(UseCoroutines, Function<ConnectionTask(Connection)>&&, Protocol = Protocol::Http);
     HTTPServer(HTTPServer&&) = default;

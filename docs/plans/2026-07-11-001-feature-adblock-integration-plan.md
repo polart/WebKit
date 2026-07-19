@@ -243,7 +243,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Allowlisted host: request to a URL that matches a block rule on an allowlisted host completes "allow" and (observable via test hook) never reaches the FFI.
   - Cold start with valid `.dat`: engine ready without parsing; with corrupt `.dat`: falls back to parse and rewrites the cache.
   - Queries before any list is loaded return "allow" (pass-through).
-- **Verification:** `run-api-tests --debug --filter=AdBlockEngine` green; TSan-clean under concurrent query + swap stress.
+- **Verification:** `run-api-tests --debug 'AdBlockEngine*'` green; TSan-clean under concurrent query + swap stress.
 - **Test deferred (2026-07-15):** The U3 service is an internal NetworkProcess C++ class with no public/Swift-visible API (the embedder API arrives in U10). A first-cut C++ `TestWebKitAPI` test (`AdBlockEngine.mm`) covered async block/allow, pass-through defaults, allowlist gating, atomic engine swap under in-flight queries, and the versioned `.dat` cache guards — but the repo standard is now Swift Testing (see `WebKit.wiki/API-Test-Guide.md`), and that guide targets the public `WebPage`/`WKWebView` API, which adblock lacks until U10. Rather than ship a C++ test against the grain or add a bespoke Swift↔C++ testbed shim for an internal class, the automated test is deferred. Re-add coverage as a Swift Testing suite when U10 exposes the embedder API and a `WebPage` can load real requests and assert blocking end-to-end. Until then, U3 is verified via the debug build (flag on/off), style, and manual smoke; the U3 behaviors above remain the required test scenarios for the eventual Swift suite.
 
 ### U4. Network request blocking hook
@@ -261,7 +261,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Third-party discrimination: a `$third-party` rule blocks the resource on a cross-site page and allows it same-site.
   - WebSocket to a hostname matching a block rule fails to open; non-matching WebSocket connects.
   - Flag off: all of the above load unblocked.
-- **Verification (interim):** debug build with the flag on and off, and `mise run styles`. The `run-api-tests --filter=AdBlockNetworkBlocking` gate and the MiniBrowser network-panel smoke (success criterion 1) both need the U10 embedder API to enable adblock and load a list, so they move to U10 — see Test deferred.
+- **Verification (interim):** debug build with the flag on and off, and `mise run styles`. The `run-api-tests 'AdBlockNetworkBlocking*'` gate and the MiniBrowser network-panel smoke (success criterion 1) both need the U10 embedder API to enable adblock and load a list, so they move to U10 — see Test deferred.
 - **Test deferred (2026-07-17):** The U4 hook lives on internal NetworkProcess classes (`NetworkLoadChecker`, `NetworkSocketChannel`) and only becomes observable end-to-end once a `WebPage`/`WKWebView` can enable adblock and load a filter list — i.e. the U10 embedder API. Per the repo's Swift Testing standard (`WebKit.wiki/API-Test-Guide.md`) and the same reasoning that deferred U3's test (2026-07-15), `AdBlockNetworkBlocking.mm` is not written now rather than shipping a C++ test against the grain or a bespoke Swift↔C++ shim for internal classes. Re-add as a Swift Testing suite at U10. The scenarios above remain required; add explicitly a **subresource block-then-allow** case that pins the 2026-07-17 "move the request once" fix (a moved-from `ResourceRequest` had silently disabled all subresource/subframe blocking) so that regression cannot return. The same deferral applies to U5–U9's `AdBlock*.mm` API tests for the same U10 dependency. When re-adding these as Swift Testing suites, see [`docs/adblock-brave-test-mapping.md`](../adblock-brave-test-mapping.md), which maps each deferred U3–U9 test case to its brave-core integration-test origin and the harness probe it needs.
 
 ### U5. CSP header injection hook
@@ -277,7 +277,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Response already carrying a CSP header: both policies enforced (original directive still applies alongside injected one).
   - No matching `$csp` rule: response headers unchanged byte-for-byte.
   - Subframe document gets its own directives based on the frame URL, not the top URL.
-- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests --filter=AdBlockCSP` deferred to U10 (needs the embedder API — see the U4 Test deferred note).
+- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests 'AdBlockCSP*'` deferred to U10 (needs the embedder API — see the U4 Test deferred note).
 
 ### U6. Cosmetic CSS computation + delivery
 
@@ -293,7 +293,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Site-specific scoping: the same selector is not hidden on a different domain.
   - Exception rule (`example.com#@#.ad-banner`) unhides.
   - Subframe gets selectors for its own URL, not the top document's.
-- **Verification (interim):** debug build (flag on/off) + `mise run styles`, plus a full `run-webkit-tests` regression pass for this WebCore-touching change. `run-api-tests --filter=AdBlockCosmetic` and the MiniBrowser smoke (success criterion 2) deferred to U10 (embedder API — see the U4 Test deferred note).
+- **Verification (interim):** debug build (flag on/off) + `mise run styles`, plus a full `run-webkit-tests` regression pass for this WebCore-touching change. `run-api-tests 'AdBlockCosmetic*'` and the MiniBrowser smoke (success criterion 2) deferred to U10 (embedder API — see the U4 Test deferred note).
 
 ### U7. Scriptlet injection
 
@@ -308,7 +308,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Page without matching scriptlet rules gets no injected script (no observable global side effects).
   - Scriptlet requiring a template parameter is instantiated with the filter's arguments.
   - Injection happens in the page's JS world such that anti-adblock detection of a separate world doesn't trivially fingerprint it (parity with Brave's behavior; assert the scriptlet effect is visible to page scripts).
-- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests --filter=AdBlockScriptlets` and the MiniBrowser smoke (success criterion 3) deferred to U10 (embedder API — see the U4 Test deferred note).
+- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests 'AdBlockScriptlets*'` and the MiniBrowser smoke (success criterion 3) deferred to U10 (embedder API — see the U4 Test deferred note).
 
 ### U8. Dynamic cosmetic hiding agent + IPC
 
@@ -323,7 +323,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Tokens are queried once: inserting 100 elements with the same class produces one IPC query (observable via test hook/count).
   - Excepted class (from U6 exceptions) is queried-and-not-hidden or never queried.
   - `generichide`-matched page: dynamic generic hiding is disabled for that page.
-- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests --filter=AdBlockDynamicHiding` deferred to U10 (embedder API — see the U4 Test deferred note).
+- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests 'AdBlockDynamicHiding*'` deferred to U10 (embedder API — see the U4 Test deferred note).
 
 ### U9. Filter list management + persistence
 
@@ -340,7 +340,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Malformed downloaded list (HTML error page instead of ABP text): parse yields near-zero rules → treated as download failure, previous list retained, error logged.
   - Restart with warm `.dat`: engine ready without re-parse (assert via timing hook or parse-counter); delete `.dat` → rebuilt from stored list text.
   - Concurrent rapid toggles produce one final consistent engine (last-write-wins, no crash).
-- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests --filter=AdBlockListManagement` and the warm-cache cold-start timing (success criterion 5) deferred to U10 (embedder API — see the U4 Test deferred note).
+- **Verification (interim):** debug build (flag on/off) + `mise run styles`. `run-api-tests 'AdBlockListManagement*'` and the warm-cache cold-start timing (success criterion 5) deferred to U10 (embedder API — see the U4 Test deferred note).
 
 ### U10. Embedder API + MiniBrowser wiring
 
@@ -355,7 +355,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Allowlist add via SPI: blocked-rule request on that host loads; remove: blocked again.
   - Subscription CRUD via SPI round-trips (list state readable back and persists across data-store re-instantiation).
   - SPI calls before NetworkProcess launch are queued/applied once it starts (no crash, config not lost).
-- **Verification:** `run-api-tests --debug --filter=AdBlockAPI` green; manual MiniBrowser walkthrough of success criteria 1-4 documented in the PR description.
+- **Verification:** `run-api-tests --debug 'AdBlockAPI*'` green; manual MiniBrowser walkthrough of success criteria 1-4 documented in the PR description.
 
 ---
 
@@ -366,13 +366,13 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
 | Rust crate tests + lint | `cargo test` and `cargo clippy` in `Source/ThirdParty/AdblockRust/` | U1, and any unit touching the bridge |
 | Debug build, flag on | `mise run build` (wraps `Tools/Scripts/build-webkit --debug`) | every unit |
 | Flag-off build | `Tools/Scripts/build-webkit --debug` with `ENABLE_ADBLOCK=0` | U2, then at each hook-adding unit (U4-U8) |
-| API tests | `Tools/Scripts/run-api-tests --debug --filter=AdBlock` | U3-U10 |
+| API tests | `Tools/Scripts/run-api-tests --debug 'AdBlock*'` | U3-U10 |
 | Style | `mise run styles` (`check-webkit-style`) | every unit |
 | Manual smoke | `mise run dev` → MiniBrowser against EasyList on YouTube + a news site | U4, U6, U7, U10 |
 
 Layout tests are not the primary vehicle here (behavior is fork-specific, not web-standard); TestWebKitAPI carries the automated coverage. A full `run-webkit-tests` pass on an unmodified-behavior area is a pre-merge regression gate for the WebCore-touching unit (U6).
 
-**API-test timing (2026-07-17):** the `--filter=AdBlock*` API-test gates and MiniBrowser smokes for U3–U9 are **deferred to U10**. They need the embedder API (enable adblock, load a list) to drive the internal engine from a `WebPage`/`WKWebView`, and the repo's Swift Testing standard targets that public API — so they are written as Swift Testing suites once U10 lands (see the U4 Test deferred note), with each unit's listed scenarios as the required cases. Until then every hook/management unit is verified by the debug build (flag on and off) and style. This does **not** relax the flag-off build gate, which still applies at every unit.
+**API-test timing (2026-07-17):** the `'AdBlock*'` API-test gates and MiniBrowser smokes for U3–U9 are **deferred to U10**. They need the embedder API (enable adblock, load a list) to drive the internal engine from a `WebPage`/`WKWebView`, and the repo's Swift Testing standard targets that public API — so they are written as Swift Testing suites once U10 lands (see the U4 Test deferred note), with each unit's listed scenarios as the required cases. Until then every hook/management unit is verified by the debug build (flag on and off) and style. This does **not** relax the flag-off build gate, which still applies at every unit.
 
 ## Definition of Done
 
@@ -487,4 +487,4 @@ Open follow-up:
 
 - **Default bundled EasyList + uBO resources JSON not shipped** — U9/U10 (partial, confidence 75)
 
-  The U9 approach calls for shipping EasyList + the uBO resources JSON as default bundled assets so first run works offline. The store exposes the in-memory hook (`setResources`) and full subscription/custom-rule/allowlist CRUD, but no default asset is bundled and no default subscription is seeded in this diff. This is packaging/embedder work that leans naturally into U10 (whose MiniBrowser wiring "uses the default bundled EasyList"); tracked here so it is not silently dropped rather than treated as a U9 gap. The `--filter=AdBlockListManagement` API test and warm-cache cold-start timing (success criterion 5) remain deferred to U10 per the API-test timing note.
+  The U9 approach calls for shipping EasyList + the uBO resources JSON as default bundled assets so first run works offline. The store exposes the in-memory hook (`setResources`) and full subscription/custom-rule/allowlist CRUD, but no default asset is bundled and no default subscription is seeded in this diff. This is packaging/embedder work that leans naturally into U10 (whose MiniBrowser wiring "uses the default bundled EasyList"); tracked here so it is not silently dropped rather than treated as a U9 gap. The `'AdBlockListManagement*'` API test and warm-cache cold-start timing (success criterion 5) remain deferred to U10 per the API-test timing note.
