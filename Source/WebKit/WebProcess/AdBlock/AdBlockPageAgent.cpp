@@ -70,9 +70,23 @@ static ASCIILiteral dynamicHidingAgentSource()
         "function schedule() {"
             "if (scheduled) return;"
             "scheduled = true;"
+            // requestAnimationFrame coalesces the flush with paint on a visible
+            // document, but it does not fire on a non-visible one (a background tab or
+            // an offscreen test page), which would strand every collected token. Arm a
+            // timer fallback as well: whichever fires first flushes, and the other
+            // finds the pending buffers empty and no-ops.
             "var raf = window.requestAnimationFrame;"
-            "if (raf) raf(flush); else setTimeout(flush, 0);"
+            "if (raf) raf(flush);"
+            "setTimeout(flush, 16);"
         "}"
+        // Follow-up (perf, not correctness): on pathological high-churn pages this
+        // observer callback fires on every mutation batch. Brave's content_cosmetic.ts
+        // scores mutation volume and, past a threshold, disconnects the observer for
+        // periodic full-document querySelectorAll polling (returning to the observer
+        // after ~10s). Not ported: the query/IPC cost is already bounded here by the
+        // timer-batched flush + permanent seen-token de-dup and by the NetworkProcess
+        // token budget, so only add the polling switch if profiling shows this callback
+        // hot on real pages.
         "try {"
             "var observer = new MutationObserver(function(records) {"
                 "for (var i = 0; i < records.length; i++) {"
