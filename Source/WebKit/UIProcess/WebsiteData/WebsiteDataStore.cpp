@@ -2050,6 +2050,11 @@ void WebsiteDataStore::removeAdBlockSubscription(const URL& url)
     protect(networkProcess())->send(Messages::NetworkProcess::RemoveAdBlockSubscription(m_sessionID, url), 0);
 }
 
+void WebsiteDataStore::setAdBlockListText(const URL& url, const String& text)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockListText(m_sessionID, url, text), 0);
+}
+
 void WebsiteDataStore::setAdBlockSubscriptionEnabled(const URL& url, bool enabled)
 {
     protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockSubscriptionEnabled(m_sessionID, url, enabled), 0);
@@ -2083,6 +2088,11 @@ void WebsiteDataStore::removeAdBlockAllowlistHost(const String& host)
 void WebsiteDataStore::adBlockState(CompletionHandler<void(String)>&& completionHandler)
 {
     protect(networkProcess())->sendWithAsyncReply(Messages::NetworkProcess::AdBlockState(m_sessionID), WTF::move(completionHandler));
+}
+
+void WebsiteDataStore::adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&& completionHandler)
+{
+    protect(networkProcess())->sendWithAsyncReply(Messages::NetworkProcess::AdBlockEngineQueryCount(), WTF::move(completionHandler));
 }
 #endif // ENABLE(ADBLOCK)
 

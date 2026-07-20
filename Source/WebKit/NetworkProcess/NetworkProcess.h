@@ -371,6 +371,7 @@ public:
     void setAdBlockEnabled(PAL::SessionID, bool);
     void addAdBlockSubscription(PAL::SessionID, URL&&, String&& expectedHash);
     void removeAdBlockSubscription(PAL::SessionID, URL&&);
+    void setAdBlockListText(PAL::SessionID, URL&&, String&& text);
     void setAdBlockSubscriptionEnabled(PAL::SessionID, URL&&, bool);
     void refreshAdBlockSubscriptions(PAL::SessionID);
     void setAdBlockCustomRules(PAL::SessionID, String&&);
@@ -378,6 +379,7 @@ public:
     void addAdBlockAllowlistHost(PAL::SessionID, String&&);
     void removeAdBlockAllowlistHost(PAL::SessionID, String&&);
     void adBlockState(PAL::SessionID, CompletionHandler<void(String)>&&);
+    void adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&&);
 #endif
 
     void syncLocalStorage(CompletionHandler<void()>&&);

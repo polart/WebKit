@@ -1723,6 +1723,13 @@ struct WKWebsiteData {
 #endif
 }
 
+- (void)_setAdBlockListTextForTesting:(NSString *)text forURL:(NSURL *)url
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockListText(URL { url }, text);
+#endif
+}
+
 - (void)_refreshAdBlockSubscriptions
 {
 #if ENABLE(ADBLOCK)
@@ -1768,6 +1775,17 @@ struct WKWebsiteData {
     });
 #else
     completionHandler(nil);
+#endif
+}
+
+- (void)_getAdBlockEngineQueryCountWithCompletionHandler:(void(^)(uint64_t))completionHandler
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->adBlockEngineQueryCount([completionHandler = makeBlockPtr(completionHandler)](uint64_t count) {
+        completionHandler(count);
+    });
+#else
+    completionHandler(0);
 #endif
 }
 

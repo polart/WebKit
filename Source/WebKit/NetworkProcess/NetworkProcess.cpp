@@ -1489,6 +1489,14 @@ void NetworkProcess::removeAdBlockSubscription(PAL::SessionID sessionID, URL&& u
     }
 }
 
+void NetworkProcess::setAdBlockListText(PAL::SessionID sessionID, URL&& url, String&& text)
+{
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setSubscriptionListText(url, text);
+    }
+}
+
 void NetworkProcess::setAdBlockSubscriptionEnabled(PAL::SessionID sessionID, URL&& url, bool enabled)
 {
     if (CheckedPtr session = networkSession(sessionID)) {
@@ -1544,6 +1552,13 @@ void NetworkProcess::adBlockState(PAL::SessionID sessionID, CompletionHandler<vo
             return completionHandler(store->stateJSON());
     }
     completionHandler({ });
+}
+
+void NetworkProcess::adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&& completionHandler)
+{
+    // The engine and its query counter are process-global (one AdBlockManager per
+    // NetworkProcess), so this readback is session-agnostic. A test hook only.
+    completionHandler(adBlockManager().engineQueryCount());
 }
 #endif // ENABLE(ADBLOCK)
 
