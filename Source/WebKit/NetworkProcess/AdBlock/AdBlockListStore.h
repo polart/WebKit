@@ -70,6 +70,16 @@ public:
     // failure — the previous list text (if any) is retained (KTD7).
     void addSubscription(const URL&, const String& expectedHash, CompletionHandler<void(bool)>&& = [](bool) { });
     void removeSubscription(const URL&);
+
+    // Installs `text` as the stored list body for `url` directly, exactly as a
+    // successful download would (registers the subscription if new, writes the
+    // text under `lists/`, then persists + rebuilds), but bypasses the network
+    // fetch, TLS validation, and content heuristics. This is the delivery seam
+    // used by the API tests to exercise multi-list assembly, warm/cold `.dat`,
+    // and persistence without a live download — the analogue of Brave's
+    // `UpdateAdBlockInstanceWithRules` / `provider->OnComponentReady(path)`. The
+    // downloader's own guards are covered separately, not through this path.
+    void setSubscriptionListText(const URL&, const String& text);
     void setSubscriptionEnabled(const URL&, bool);
     void refreshSubscription(const URL&, CompletionHandler<void(bool)>&& = [](bool) { });
     void refreshAllSubscriptions();
@@ -115,6 +125,14 @@ private:
 
     void startDownload(const URL&, const String& expectedHash, CompletionHandler<void(bool)>&&);
     void handleDownload(const URL&, const String& expectedHash, std::optional<Vector<uint8_t>>&&, CompletionHandler<void(bool)>&&);
+
+    // Stores `bytes` as `subscription`'s on-disk list body (lazily assigning a
+    // hash-derived filename), stamps `lastFetched`, fills an empty title from the
+    // list metadata, then persists config and schedules a rebuild. Shared by the
+    // download-completion path (`handleDownload`) and the direct-injection testing
+    // seam (`setSubscriptionListText`) so the two cannot drift. Returns false only
+    // on a disk-write failure.
+    bool installListText(Subscription&, std::span<const uint8_t> bytes);
 
     // Coalesces a burst of config changes into a single compile-and-swap on the
     // next run-loop turn.
