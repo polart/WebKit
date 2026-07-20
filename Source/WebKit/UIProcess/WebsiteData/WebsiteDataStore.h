@@ -207,6 +207,7 @@ public:
     void addAdBlockAllowlistHost(const String&);
     void removeAdBlockAllowlistHost(const String&);
     void adBlockState(CompletionHandler<void(String)>&&);
+    void adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&&);
 #endif
     bool LEGACY_NODELETE resourceLoadStatisticsDebugMode() const;
     void setResourceLoadStatisticsDebugMode(bool);
