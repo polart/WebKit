@@ -323,5 +323,6 @@ messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
     AddAdBlockAllowlistHost(PAL::SessionID sessionID, String host)
     RemoveAdBlockAllowlistHost(PAL::SessionID sessionID, String host)
     AdBlockState(PAL::SessionID sessionID) -> (String stateJSON)
+    AdBlockEngineQueryCount() -> (uint64_t count)
 #endif
 }

@@ -199,6 +199,12 @@ typedef NS_ENUM(uint8_t, _WKRestrictedOpenerType) {
 - (void)_removeAdBlockAllowlistHost:(NSString *)host;
 - (void)_getAdBlockStateWithCompletionHandler:(void(^)(NSDictionary *))completionHandler;
 
+// Test hook: the running total of filter queries that actually reached the engine
+// (an allowlisted host, a disabled master toggle, or a query issued before any
+// list loaded never increments it). Process-global, not per data store. Used by
+// the U8 dynamic-hiding tests to prove per-document token de-duplication.
+- (void)_getAdBlockEngineQueryCountWithCompletionHandler:(void(^)(uint64_t))completionHandler;
+
 @end
 
 NS_ASSUME_NONNULL_END

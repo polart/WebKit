@@ -1507,6 +1507,13 @@ void NetworkProcess::adBlockState(PAL::SessionID sessionID, CompletionHandler<vo
     }
     completionHandler({ });
 }
+
+void NetworkProcess::adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&& completionHandler)
+{
+    // The engine and its query counter are process-global (one AdBlockManager per
+    // NetworkProcess, KTD3), so this readback is session-agnostic. A test hook only.
+    completionHandler(adBlockManager().engineQueryCount());
+}
 #endif // ENABLE(ADBLOCK)
 
 void NetworkProcess::updateStorageAccessPromptQuirks(Vector<WebCore::OrganizationStorageAccessPromptQuirk>&& organizationStorageAccessPromptQuirks)

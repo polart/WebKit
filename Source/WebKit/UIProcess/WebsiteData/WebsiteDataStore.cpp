@@ -2080,6 +2080,11 @@ void WebsiteDataStore::adBlockState(CompletionHandler<void(String)>&& completion
 {
     protect(networkProcess())->sendWithAsyncReply(Messages::NetworkProcess::AdBlockState(m_sessionID), WTF::move(completionHandler));
 }
+
+void WebsiteDataStore::adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&& completionHandler)
+{
+    protect(networkProcess())->sendWithAsyncReply(Messages::NetworkProcess::AdBlockEngineQueryCount(), WTF::move(completionHandler));
+}
 #endif // ENABLE(ADBLOCK)
 
 void WebsiteDataStore::setStatisticsTestingCallback(Function<void(const String&)>&& callback)

@@ -1728,6 +1728,17 @@ struct WKWebsiteData {
 #endif
 }
 
+- (void)_getAdBlockEngineQueryCountWithCompletionHandler:(void(^)(uint64_t))completionHandler
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->adBlockEngineQueryCount([completionHandler = makeBlockPtr(completionHandler)](uint64_t count) {
+        completionHandler(count);
+    });
+#else
+    completionHandler(0);
+#endif
+}
+
 - (NSString *)_thirdPartyCookieBlockingModeForTesting
 {
     switch (protect(*_websiteDataStore)->thirdPartyCookieBlockingMode()) {
