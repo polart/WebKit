@@ -201,6 +201,24 @@ void AdBlockListStore::load(CompletionHandler<void()>&& completion)
 {
     loadConfig();
 
+    // The AdBlockManager is process-global: one compiled engine and one enable
+    // gate per NetworkProcess, shared across every data store/session (KTD3). A
+    // persistent session that has never configured adblock (no config file on
+    // disk) must not touch that shared state on load — otherwise it would force
+    // the gate off and rebuild an empty engine, clobbering the engine a *different*
+    // session just restored (observed on relaunch, where a second persistent
+    // session's load raced in after the configured one). Every mutation that
+    // changes a *persisted* engine input (setEnabled/setCustomRules/
+    // setSubscriptionListText/...) writes the config file before it rebuilds, so a
+    // genuinely-configured session always has one here and is never skipped. (The
+    // lone non-persisting mutation, setResources, rebuilds without a config write,
+    // but its input isn't persisted either, so a resources-only session correctly
+    // has nothing to restore and is right to be skipped.)
+    if (!FileSystem::fileExists(configPath())) {
+        completion();
+        return;
+    }
+
     Ref networkProcess { m_networkProcess.get() };
     Ref manager { networkProcess->adBlockManager() };
     manager->setAllowlistedHosts(HashSet<String> { m_allowlist });
@@ -251,26 +269,30 @@ void AdBlockListStore::handleDownload(const URL& url, const String& expectedHash
         return;
     }
 
-    if (subscription->filename.isEmpty())
-        subscription->filename = makeString(sha256Hex(utf8Bytes(url.string()).span()), ".txt"_s);
+    completion(installListText(*subscription, result->span()));
+}
+
+bool AdBlockListStore::installListText(Subscription& subscription, std::span<const uint8_t> bytes)
+{
+    if (subscription.filename.isEmpty())
+        subscription.filename = makeString(sha256Hex(utf8Bytes(subscription.url.string()).span()), ".txt"_s);
 
     FileSystem::makeAllDirectories(listsDirectory());
-    if (!FileSystem::overwriteEntireFile(listTextPath(subscription->filename), result->span())) {
-        RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: failed to write downloaded list text");
-        completion(false);
-        return;
+    if (!FileSystem::overwriteEntireFile(listTextPath(subscription.filename), bytes)) {
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: failed to write list text");
+        return false;
     }
 
-    subscription->lastFetched = WallTime::now().secondsSinceEpoch().value();
-    if (subscription->title.isEmpty()) {
-        auto metadata = AdBlockEngine::readListMetadata(result->span());
+    subscription.lastFetched = WallTime::now().secondsSinceEpoch().value();
+    if (subscription.title.isEmpty()) {
+        auto metadata = AdBlockEngine::readListMetadata(bytes);
         if (!metadata.title.isEmpty())
-            subscription->title = metadata.title;
+            subscription.title = metadata.title;
     }
 
     persistConfig();
     scheduleRebuild();
-    completion(true);
+    return true;
 }
 
 void AdBlockListStore::addSubscription(const URL& url, const String& expectedHash, CompletionHandler<void(bool)>&& completion)
@@ -285,6 +307,31 @@ void AdBlockListStore::addSubscription(const URL& url, const String& expectedHas
     }
     persistConfig();
     startDownload(url, expectedHash, WTF::move(completion));
+}
+
+void AdBlockListStore::setSubscriptionListText(const URL& url, const String& text)
+{
+    // `loadConfig` drops subscriptions with an invalid URL, so an invalid `url`
+    // here would work in-process yet silently vanish on the next restart-reload.
+    // Reject it up front rather than persist an entry that can't round-trip.
+    if (!url.isValid()) {
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: ignoring injected list text for an invalid URL");
+        return;
+    }
+
+    auto* subscription = findSubscription(url);
+    if (!subscription) {
+        Subscription sub;
+        sub.url = url;
+        m_subscriptions.append(WTF::move(sub));
+        subscription = &m_subscriptions.last();
+    }
+
+    // This is the test-injection seam: unlike a real download, a write failure here
+    // is a test-environment fault, not a runtime condition — surface it loudly in
+    // debug builds instead of letting it manifest as a confusing poll timeout.
+    bool didInstall = installListText(*subscription, utf8Bytes(text).span());
+    ASSERT_UNUSED(didInstall, didInstall);
 }
 
 void AdBlockListStore::removeSubscription(const URL& url)

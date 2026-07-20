@@ -366,6 +366,7 @@ public:
     void setAdBlockEnabled(PAL::SessionID, bool);
     void addAdBlockSubscription(PAL::SessionID, URL&&, String&& expectedHash);
     void removeAdBlockSubscription(PAL::SessionID, URL&&);
+    void setAdBlockListText(PAL::SessionID, URL&&, String&& text);
     void setAdBlockSubscriptionEnabled(PAL::SessionID, URL&&, bool);
     void refreshAdBlockSubscriptions(PAL::SessionID);
     void setAdBlockCustomRules(PAL::SessionID, String&&);

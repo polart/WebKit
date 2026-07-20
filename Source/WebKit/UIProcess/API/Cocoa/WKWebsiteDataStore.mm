@@ -1680,6 +1680,13 @@ struct WKWebsiteData {
 #endif
 }
 
+- (void)_setAdBlockListTextForTesting:(NSString *)text forURL:(NSURL *)url
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockListText(URL { url }, text);
+#endif
+}
+
 - (void)_refreshAdBlockSubscriptions
 {
 #if ENABLE(ADBLOCK)

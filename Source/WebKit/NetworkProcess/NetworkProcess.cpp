@@ -1451,6 +1451,14 @@ void NetworkProcess::removeAdBlockSubscription(PAL::SessionID sessionID, URL&& u
     }
 }
 
+void NetworkProcess::setAdBlockListText(PAL::SessionID sessionID, URL&& url, String&& text)
+{
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setSubscriptionListText(url, text);
+    }
+}
+
 void NetworkProcess::setAdBlockSubscriptionEnabled(PAL::SessionID sessionID, URL&& url, bool enabled)
 {
     if (CheckedPtr session = networkSession(sessionID)) {

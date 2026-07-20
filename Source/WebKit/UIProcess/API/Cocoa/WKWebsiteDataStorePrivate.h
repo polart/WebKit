@@ -191,6 +191,12 @@ typedef NS_ENUM(uint8_t, _WKRestrictedOpenerType) {
 - (void)_setAdBlockEnabled:(BOOL)enabled;
 - (void)_addAdBlockSubscriptionWithURL:(NSURL *)url expectedHash:(NSString *)expectedHash;
 - (void)_removeAdBlockSubscriptionWithURL:(NSURL *)url;
+// Testing seam: install `text` as the stored body for the list at `url` (adding
+// the subscription if new) exactly as a successful download would, but without a
+// network fetch — so the API tests can exercise multi-list assembly, warm/cold
+// `.dat`, and persistence over the self-signed test proxy, which NetworkProcess
+// list downloads cannot validate. Mirrors Brave's UpdateAdBlockInstanceWithRules.
+- (void)_setAdBlockListTextForTesting:(NSString *)text forURL:(NSURL *)url;
 - (void)_setAdBlockSubscriptionWithURL:(NSURL *)url enabled:(BOOL)enabled;
 - (void)_refreshAdBlockSubscriptions;
 - (void)_setAdBlockCustomRules:(NSString *)rules;

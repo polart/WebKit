@@ -195,6 +195,7 @@ public:
     void setAdBlockEnabled(bool);
     void addAdBlockSubscription(const URL&, const String& expectedHash);
     void removeAdBlockSubscription(const URL&);
+    void setAdBlockListText(const URL&, const String& text);
     void setAdBlockSubscriptionEnabled(const URL&, bool);
     void refreshAdBlockSubscriptions();
     void setAdBlockCustomRules(const String&);

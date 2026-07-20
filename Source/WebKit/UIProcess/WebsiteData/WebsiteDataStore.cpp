@@ -2046,6 +2046,11 @@ void WebsiteDataStore::removeAdBlockSubscription(const URL& url)
     protect(networkProcess())->send(Messages::NetworkProcess::RemoveAdBlockSubscription(m_sessionID, url), 0);
 }
 
+void WebsiteDataStore::setAdBlockListText(const URL& url, const String& text)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockListText(m_sessionID, url, text), 0);
+}
+
 void WebsiteDataStore::setAdBlockSubscriptionEnabled(const URL& url, bool enabled)
 {
     protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockSubscriptionEnabled(m_sessionID, url, enabled), 0);
