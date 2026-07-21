@@ -82,6 +82,8 @@ void AdBlockListDownloader::start(NetworkProcess& networkProcess)
     loadParameters.storedCredentialsPolicy = StoredCredentialsPolicy::DoNotUse;
     loadParameters.clientCredentialPolicy = ClientCredentialPolicy::CannotAskClientForCredentials;
 
+    RELEASE_LOG(AdBlock, "AdBlockListDownloader: starting fetch of %{public}s", m_url.string().utf8().data());
+
     Ref task = NetworkDataTask::create(*networkSession, *this, loadParameters);
     m_task = task.ptr();
     task->resume();
@@ -161,6 +163,7 @@ void AdBlockListDownloader::didCompleteWithError(const ResourceError& error, con
         finish(std::nullopt);
         return;
     }
+    RELEASE_LOG(AdBlock, "AdBlockListDownloader: fetch of %{public}s complete (%zu bytes)", m_url.string().utf8().data(), m_data.size());
     finish(WTF::move(m_data));
 }
 
