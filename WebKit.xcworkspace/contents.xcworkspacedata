@@ -56,6 +56,9 @@
       location = "group:Tools/SwiftBrowser/SwiftBrowser.xcodeproj">
    </FileRef>
    <FileRef
+      location = "group:Tools/NewBrowser/NewBrowser.xcodeproj">
+   </FileRef>
+   <FileRef
       location = "group:Tools/TestWebKitAPI/TestWebKitAPI.xcodeproj">
    </FileRef>
    <FileRef
