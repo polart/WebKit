@@ -9,11 +9,14 @@
 #if ENABLE(ADBLOCK)
 
 #include "AuthenticationChallengeDisposition.h"
+#include "AuthenticationManager.h"
 #include "Logging.h"
 #include "NetworkLoadParameters.h"
 #include "NetworkProcess.h"
 #include "NetworkSession.h"
+#include <WebCore/AuthenticationChallenge.h>
 #include <WebCore/FrameLoaderTypes.h>
+#include <WebCore/ProtectionSpace.h>
 #include <WebCore/ResourceError.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
@@ -37,8 +40,9 @@ Ref<AdBlockListDownloader> AdBlockListDownloader::create(NetworkProcess& network
     return downloader;
 }
 
-AdBlockListDownloader::AdBlockListDownloader(NetworkProcess&, PAL::SessionID sessionID, const URL& url, CompletionHandler&& completion)
-    : m_sessionID(sessionID)
+AdBlockListDownloader::AdBlockListDownloader(NetworkProcess& networkProcess, PAL::SessionID sessionID, const URL& url, CompletionHandler&& completion)
+    : m_networkProcess(networkProcess)
+    , m_sessionID(sessionID)
     , m_url(url)
     , m_completion(WTF::move(completion))
 {
@@ -108,10 +112,21 @@ void AdBlockListDownloader::willPerformHTTPRedirection(ResourceResponse&&, Resou
     completionHandler(WTF::move(request));
 }
 
-void AdBlockListDownloader::didReceiveChallenge(AuthenticationChallenge&&, NegotiatedLegacyTLS, ChallengeCompletionHandler&& completionHandler)
+void AdBlockListDownloader::didReceiveChallenge(AuthenticationChallenge&& challenge, NegotiatedLegacyTLS negotiatedLegacyTLS, ChallengeCompletionHandler&& completionHandler)
 {
-    // No credentials are ever supplied for a public list download; cancelling a
-    // server-trust challenge here means a failed TLS validation aborts the fetch.
+    // A TLS server-trust evaluation arrives here as a challenge on every HTTPS
+    // connection; it must go through the platform's certificate validation
+    // (default handling), not be cancelled — cancelling it aborts the handshake
+    // and every download fails. Route it to the AuthenticationManager exactly as
+    // PingLoad/BackgroundFetchLoad do (no page context: empty proxy id, no origin).
+    if (challenge.protectionSpace().authenticationScheme() == ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested) {
+        Ref networkProcess { m_networkProcess.get() };
+        Ref { networkProcess->authenticationManager() }->didReceiveAuthenticationChallenge(m_sessionID, { }, nullptr, challenge, negotiatedLegacyTLS, WTF::move(completionHandler));
+        return;
+    }
+
+    // No credentials are ever supplied for a public list download; reject any
+    // credential-based challenge.
     completionHandler(AuthenticationChallengeDisposition::Cancel, { });
 }
 
