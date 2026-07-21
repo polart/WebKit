@@ -24,6 +24,7 @@
 #include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
+#include <wtf/WeakRef.h>
 
 namespace WebKit {
 
@@ -59,6 +60,7 @@ private:
     void wasBlockedByRestrictions() final;
     void wasBlockedByDisabledFTP() final;
 
+    const WeakRef<NetworkProcess> m_networkProcess;
     PAL::SessionID m_sessionID;
     URL m_url;
     CompletionHandler m_completion;
