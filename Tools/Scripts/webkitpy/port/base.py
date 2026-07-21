@@ -1280,6 +1280,14 @@ class Port(object):
             args.append('--cmake')
         return self._executive.run_command([swiftBrowser] + args, stdout=None, cwd=self.webkit_base(), return_stderr=False, decode_output=False, ignore_errors=True)
 
+    def run_newbrowser(self, args):
+        newBrowser = self.path_to_script("run-newbrowser-perl-wrapper")
+        args.append(self._config.flag_for_configuration(self.get_option('configuration')))
+        args.append("--%s" % self.get_option('platform'))
+        if self.get_option('use_cmake'):
+            args.append('--cmake')
+        return self._executive.run_command([newBrowser] + args, stdout=None, cwd=self.webkit_base(), return_stderr=False, decode_output=False, ignore_errors=True)
+
     def run_webdriver(self, args):
         raise NotImplementedError('Port.run_webdriver')
 
