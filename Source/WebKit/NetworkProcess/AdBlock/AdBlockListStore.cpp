@@ -442,6 +442,7 @@ void AdBlockListStore::setEnabled(bool enabled)
     // shared gate stale (this store thinks it is enabled while the gate is off).
     // The compiled engine stays warm; only the gate flips.
     Ref { m_networkProcess.get() }->adBlockManager().setEnabled(enabled);
+    RELEASE_LOG(AdBlock, "AdBlockListStore: master enable gate set %{public}s", enabled ? "ON" : "OFF");
 
     // Persist only when this store's own value actually changed.
     if (m_enabled == enabled)
@@ -504,6 +505,8 @@ void AdBlockListStore::rebuildEngine()
     Vector<AdBlockEngine::ListInput> inlineLists;
     if (!m_customRules.isEmpty())
         inlineLists.append({ utf8Bytes(m_customRules), restrictivePermissionMask });
+
+    RELEASE_LOG(AdBlock, "AdBlockListStore: rebuilding engine from %zu enabled list(s)%s", files.size(), m_customRules.isEmpty() ? "" : " + custom rules");
 
     Ref manager { Ref { m_networkProcess.get() }->adBlockManager() };
     // Compile-and-swap on the WorkQueue, then re-serialize the `.dat` so the warm

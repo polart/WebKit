@@ -9,6 +9,7 @@
 #if ENABLE(ADBLOCK)
 
 #include "AdBlockManager.h"
+#include "Logging.h"
 #include "NetworkProcess.h"
 #include <WebCore/HTTPHeaderNames.h>
 #include <WebCore/RegistrableDomain.h>
@@ -167,8 +168,11 @@ void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrig
         return;
     }
 
-    manager->checkRequest(urlString, hostname, sourceHostname, requestType, isThirdParty, [finish = WTF::move(finish), request = WTF::move(request), completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
-        finish(WTF::move(request), isBlockingResult(result), WTF::move(completion));
+    manager->checkRequest(urlString, hostname, sourceHostname, requestType, isThirdParty, [finish = WTF::move(finish), request = WTF::move(request), urlString, requestType, completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
+        bool blocked = isBlockingResult(result);
+        if (blocked)
+            RELEASE_LOG(AdBlock, "AdBlock: blocked %{public}s (%{public}s)", urlString.utf8().data(), requestType.characters());
+        finish(WTF::move(request), blocked, WTF::move(completion));
     });
 }
 
@@ -204,8 +208,11 @@ void checkWebSocketRequest(NetworkProcess& networkProcess, const SecurityOriginD
     auto url = request.url();
     bool isThirdParty = !RegistrableDomain(url).matches(topOrigin);
 
-    networkProcess.adBlockManager().checkRequest(url.string(), url.host().toString(), topOrigin.host(), "websocket"_s, isThirdParty, [completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
-        completion(isBlockingResult(result));
+    networkProcess.adBlockManager().checkRequest(url.string(), url.host().toString(), topOrigin.host(), "websocket"_s, isThirdParty, [urlString = url.string(), completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
+        bool blocked = isBlockingResult(result);
+        if (blocked)
+            RELEASE_LOG(AdBlock, "AdBlock: blocked websocket %{public}s", urlString.utf8().data());
+        completion(blocked);
     });
 }
 
