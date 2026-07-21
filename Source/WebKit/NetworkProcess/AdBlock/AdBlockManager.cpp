@@ -90,7 +90,11 @@ void AdBlockManager::setEngineFromListFiles(Vector<ListFileInput>&& files, Vecto
         }
         for (auto& inlineList : inlineLists)
             lists.append(WTF::move(inlineList));
+        size_t totalBytes = 0;
+        for (auto& list : lists)
+            totalBytes += list.text.size();
         m_engine = AdBlockEngine::createFromLists(lists, resourcesJSON);
+        RELEASE_LOG(AdBlock, "AdBlockManager: engine rebuilt from %zu list(s), %zu bytes of filter text", lists.size(), totalBytes);
         RunLoop::mainSingleton().dispatch(WTF::move(completion));
     });
 }
@@ -140,6 +144,7 @@ bool AdBlockManager::loadCacheOnQueue(const String& path)
     }
 
     m_engine = WTF::move(engine);
+    RELEASE_LOG(AdBlock, "AdBlockManager: warm .dat cache loaded (%zu bytes); skipped re-parsing source lists", bytes.size());
     return true;
 }
 
