@@ -69,6 +69,12 @@ struct NewBrowserApp: App {
                 }
                 .keyboardShortcut("r")
                 .disabled(focusedBrowserViewModel == nil)
+
+                Button("Show Web Inspector", systemImage: "ladybug") {
+                    focusedBrowserViewModel!.showInspector()
+                }
+                .keyboardShortcut("i", modifiers: [.option, .command])
+                .disabled(focusedBrowserViewModel == nil)
             }
 
             CommandGroup(replacing: .importExport) {
@@ -92,6 +98,7 @@ struct NewBrowserApp: App {
         Settings {
             SettingsView(currentURL: mostRecentURL)
         }
+        .windowResizability(.contentMinSize)
         #endif
     }
 }

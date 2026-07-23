@@ -181,7 +181,7 @@ private struct FeatureFlagsView: View {
             }
         }
         .listStyle(.inset)
-        .searchable(text: $model.searchQuery, placement: .sidebar, prompt: "Search")
+        .searchable(text: $model.searchQuery, prompt: "Search")
     }
 
     var body: some View {
@@ -228,25 +228,59 @@ private struct DebugOverlaysView: View {
     }
 }
 
+private enum SettingsSection: String, CaseIterable, Identifiable {
+    case general
+    case featureFlags
+    case debugOverlays
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .featureFlags: "Feature Flags"
+        case .debugOverlays: "Debug Overlays"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general: "gear"
+        case .featureFlags: "flag.filled.and.flag.crossed"
+        case .debugOverlays: "squareshape.split.2x2.dotted.inside.and.outside"
+        }
+    }
+}
+
 struct SettingsView: View {
     let currentURL: URL?
 
+    @State
+    private var selection: SettingsSection = .general
+
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gear") {
-                GeneralSettingsView(currentURL: currentURL)
+        NavigationSplitView {
+            List(SettingsSection.allCases, selection: $selection) { section in
+                Label(section.title, systemImage: section.systemImage)
+                    .tag(section)
             }
-
-            Tab("Feature Flags", systemImage: "flag.filled.and.flag.crossed") {
-                FeatureFlagsView()
-                    .environment(FeatureFlagsModel())
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            Group {
+                switch selection {
+                case .general:
+                    GeneralSettingsView(currentURL: currentURL)
+                case .featureFlags:
+                    FeatureFlagsView()
+                        .environment(FeatureFlagsModel())
+                case .debugOverlays:
+                    DebugOverlaysView()
+                }
             }
-
-            Tab("Debug Overlays", systemImage: "squareshape.split.2x2.dotted.inside.and.outside") {
-                DebugOverlaysView()
-            }
+            .navigationTitle(selection.title)
+            .frame(minWidth: 300, minHeight: 400, idealHeight: 500, maxHeight: .infinity)
         }
-        .scenePadding()
     }
 }
 

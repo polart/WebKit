@@ -27,11 +27,27 @@ import Observation
 import UniformTypeIdentifiers
 @_spi(Private) @_spi(CrossImportOverlay) import WebKit
 import WebKit_Private
+import WebKit_Private._WKInspector
+import WebKit_Private._WKInspectorDelegate
+import WebKit_Private._WKInspectorIBActions
 import os
 
 struct PDF {
     let data: Data
     let title: String?
+}
+
+/// Forces the Web Inspector to open in its own window rather than docked to the page.
+///
+/// The page's web view is hosted inside a SwiftUI `WebView`, whose superview is managed by
+/// SwiftUI's layout system. A docked (attached) inspector is inserted as a sibling into that
+/// hierarchy and never gets a usable drawing area, so it renders as an empty grey box.
+/// Detaching once moves the inspector into its own top-level window (which renders reliably)
+/// and persists `inspectorStartsAttached = false`, so subsequent opens start detached directly.
+private final class InspectorDelegate: NSObject, _WKInspectorDelegate {
+    func inspectorFrontendLoaded(_ inspector: _WKInspector!) {
+        inspector.detach()
+    }
 }
 
 extension PDF: Transferable {
@@ -85,6 +101,9 @@ final class BrowserViewModel {
 
         self.page = WebPage(configuration: configuration, navigationDecider: self.navigationDecider, dialogPresenter: self.dialogPresenter)
         self.page.isInspectable = true
+        // `isInspectable` only enables remote inspection; the local Web Inspector frontend
+        // (opened via `_inspector.show()`) additionally requires developer extras to be enabled.
+        self.page.backingWebView.configuration.preferences._developerExtrasEnabled = true
 
         self.navigationDecider.owner = self
         self.dialogPresenter.owner = self
@@ -183,6 +202,23 @@ final class BrowserViewModel {
             }
         } catch {
             Self.logger.error("Reload failed: \(error)")
+        }
+    }
+
+    // `_WKInspector.delegate` is weak, so the delegate must be owned here.
+    private let inspectorDelegate = InspectorDelegate()
+
+    func showInspector() {
+        guard let inspector = page.backingWebView._inspector else {
+            return
+        }
+
+        inspector.delegate = inspectorDelegate
+
+        if inspector.isVisible {
+            inspector.hide()
+        } else {
+            inspector.show()
         }
     }
 
