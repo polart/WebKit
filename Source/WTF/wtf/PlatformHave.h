@@ -1934,8 +1934,12 @@
 
 #endif
 
+// The AppKit NSRefreshControlHosting SPI protocol this feature relies on is only
+// present in the Apple Internal SDK. USE(APPLE_INTERNAL_SDK) is unavailable here
+// (PlatformHave.h precedes PlatformUse.h), so detect the internal SDK directly.
 #if !defined(HAVE_NSREFRESHCONTROLLER) \
-    && ((PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 270000))
+    && ((PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 270000) \
+    && defined(__has_include) && __has_include(<CoreFoundation/CFPriv.h>))
 #define HAVE_NSREFRESHCONTROLLER 1
 #endif
 
