@@ -133,67 +133,105 @@ private struct GeneralSettingsView: View {
     }
 }
 
-private struct FeatureFlagToggle: View {
-    @Binding
-    var value: Bool
-
-    let feature: _WKFeature
-
-    var body: some View {
-        Toggle(isOn: $value) {
-            VStack(alignment: .leading) {
-                Text(feature.name)
-                    .bold(value != feature.defaultValue)
-
-                Text(feature.status.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-    }
-}
-
-private struct FeatureFlagsView: View {
+// Feature flags rendered as a `Table` with collapsible category groups via
+// `DisclosureTableRow`, giving real column headers and an outline-style
+// (indented, disclosure-triangle) grouping. Note: the column header row is
+// pinned, but the category (disclosure) rows scroll with their content —
+// `Table` has no sticky group-header support.
+private struct FeatureFlagsTableView: View {
     @Environment(FeatureFlagsModel.self)
     var model
+
+    @State
+    private var collapsedCategories: Set<UInt> = []
+
+    // `DisclosureTableRow` requires the label row and its child rows to share a
+    // single `TableRowValue`, so both categories and features are wrapped here.
+    private struct Row: Identifiable {
+        enum Kind {
+            case category(WebFeatureCategory)
+            case feature(_WKFeature)
+        }
+
+        let kind: Kind
+
+        var id: String {
+            switch kind {
+            case .category(let category): "category-\(category.rawValue)"
+            case .feature(let feature): feature.id
+            }
+        }
+    }
 
     private var groupedFeatures: FeatureFlagsModel.GroupedFeatures {
         model.groups(filteredBy: model.searchQuery)
     }
 
-    @ViewBuilder
-    private var featureList: some View {
+    private func expansion(for category: WebFeatureCategory) -> Binding<Bool> {
+        Binding(
+            get: { !collapsedCategories.contains(category.rawValue) },
+            set: { isExpanded in
+                if isExpanded {
+                    collapsedCategories.remove(category.rawValue)
+                } else {
+                    collapsedCategories.insert(category.rawValue)
+                }
+            }
+        )
+    }
+
+    var body: some View {
         @Bindable
         var model = model
 
-        List {
+        Table(of: Row.self) {
+            TableColumn("Feature") { row in
+                switch row.kind {
+                case .category(let category):
+                    Text(category.description)
+                        .font(.headline)
+                case .feature(let feature):
+                    Text(feature.name)
+                        .bold((model.customizedFeatures[feature.key] ?? feature.defaultValue) != feature.defaultValue)
+                }
+            }
+
+            TableColumn("Enabled") { row in
+                if case .feature(let feature) = row.kind {
+                    Toggle("", isOn: $model.customizedFeatures[feature.key, default: feature.defaultValue])
+                        .labelsHidden()
+                        .toggleStyle(.checkbox)
+                }
+            }
+            .width(60)
+            .alignment(.center)
+
+            TableColumn("Status") { row in
+                if case .feature(let feature) = row.kind {
+                    Text(feature.status.description)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .width(min: 80, ideal: 90)
+        } rows: {
             ForEach(groupedFeatures, id: \.category.rawValue) { group in
-                Section(group.category.description) {
+                DisclosureTableRow(Row(kind: .category(group.category)), isExpanded: expansion(for: group.category)) {
                     ForEach(group.features) { feature in
-                        FeatureFlagToggle(
-                            value: $model.customizedFeatures[feature.key, default: feature.defaultValue],
-                            feature: feature
-                        )
+                        TableRow(Row(kind: .feature(feature)))
                     }
                 }
             }
         }
-        .listStyle(.inset)
         .searchable(text: $model.searchQuery, prompt: "Search")
-    }
-
-    var body: some View {
-        Group {
-            featureList
-
+        .safeAreaInset(edge: .bottom) {
             HStack {
                 Spacer()
                 Button("Reset Feature Flags") {
                     model.customizedFeatures.removeAll()
                 }
             }
+            .padding()
+            .background(.bar)
         }
         .onChange(of: model.customizedFeatures, model.update)
     }
@@ -264,7 +302,7 @@ struct SettingsView: View {
                 Label(section.title, systemImage: section.systemImage)
                     .tag(section)
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .navigationSplitViewColumnWidth(215)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             Group {
@@ -272,18 +310,25 @@ struct SettingsView: View {
                 case .general:
                     GeneralSettingsView(currentURL: currentURL)
                 case .featureFlags:
-                    FeatureFlagsView()
+                    FeatureFlagsTableView()
                         .environment(FeatureFlagsModel())
                 case .debugOverlays:
                     DebugOverlaysView()
                 }
             }
             .navigationTitle(selection.title)
-            .frame(minWidth: 300, minHeight: 400, idealHeight: 500, maxHeight: .infinity)
+            .frame(minWidth: 400, minHeight: 400, idealHeight: 500, maxHeight: .infinity)
         }
+        .navigationSplitViewStyle(.balanced)
     }
 }
 
 #Preview {
     SettingsView(currentURL: URL(string: "https://www.apple.com"))
+}
+
+#Preview("Feature Flags") {
+    FeatureFlagsTableView()
+        .environment(FeatureFlagsModel())
+        .frame(width: 520, height: 520)
 }
