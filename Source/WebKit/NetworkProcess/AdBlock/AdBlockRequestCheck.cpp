@@ -57,7 +57,9 @@ ASCIILiteral requestTypeForDestination(FetchOptionsDestination destination)
         return "stylesheet"_s;
     case FetchOptionsDestination::EmptyString:
     case FetchOptionsDestination::Json:
+    case FetchOptionsDestination::Text:
         return "xhr"_s;
+    case FetchOptionsDestination::CompressionDictionary:
     case FetchOptionsDestination::Manifest:
     case FetchOptionsDestination::Model:
     case FetchOptionsDestination::Report:
