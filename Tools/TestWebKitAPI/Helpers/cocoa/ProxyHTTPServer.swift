@@ -211,14 +211,7 @@ public struct ProxyHTTPServer: ~Copyable {
     ) async throws(E) -> sending Result where E: Error, Result: ~Copyable {
         if listensLazily {
             await withCheckedContinuation { continuation in
-                unsafe self.storage.pointee.startListening(
-                    consuming: .init(
-                        {
-                            continuation.resume()
-                        },
-                        WTF.ThreadLikeAssertion(WTF.CurrentThreadLike())
-                    )
-                )
+                unsafe self.storage.pointee.startListening(consuming: .init(continuation))
             }
         }
 
@@ -228,14 +221,7 @@ public struct ProxyHTTPServer: ~Copyable {
         let result = try await body(configuration)
 
         await withCheckedContinuation { continuation in
-            unsafe self.storage.pointee.cancel(
-                consuming: .init(
-                    {
-                        continuation.resume()
-                    },
-                    WTF.ThreadLikeAssertion(WTF.CurrentThreadLike())
-                )
-            )
+            unsafe self.storage.pointee.cancel(consuming: .init(continuation))
         }
 
         return result
