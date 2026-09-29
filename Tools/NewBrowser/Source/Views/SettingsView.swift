@@ -21,45 +21,271 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 // THE POSSIBILITY OF SUCH DAMAGE.
 
+import AppKit
 import SwiftUI
 @_spi(_) import WebKit
 import WebKit_Private._WKFeature
 
-private struct PermissionDecisionView: View {
+// MARK: - Palette
+
+// The Settings window is styled with flat, explicitly dark colors rather than
+// system materials, so `SettingsView` forces the dark color scheme.
+private enum Palette {
+    static let sidebarBackground = Color(white: 0.10)
+    static let detailBackground = Color(white: 0.137)
+    static let cardBackground = Color(white: 0.17)
+    static let controlBackground = Color(white: 0.21)
+    static let sidebarSelection = Color(white: 0.20)
+    static let searchFieldBackground = Color(white: 0.20)
+    static let separator = Color(white: 1.0, opacity: 0.08)
+    static let secondaryText = Color(white: 0.63)
+}
+
+/// Vertical center of the title bar, shared by the window controls, the page
+/// title and the search field so all three sit on the same line.
+private enum Metrics {
+    static let titleBarHeight: CGFloat = 52
+    static let titleBarControlHeight: CGFloat = 30
+    static let sidebarWidth: CGFloat = 220
+    static let contentInset: CGFloat = 20
+    static let rowInset: CGFloat = 10
+    static let rowHeight: CGFloat = 43
+    static let controlWidth: CGFloat = 173
+    static let controlHeight: CGFloat = 27
+    // Wide enough for a URL, while still leaving room for a row's title at the
+    // window's minimum width.
+    static let textFieldWidth: CGFloat = 240
+    static let searchFieldWidth: CGFloat = 318
+    // Width reserved for a group header's symbol, so titles align across pages
+    // whether the header shows a symbol or a disclosure chevron.
+    static let groupSymbolWidth: CGFloat = 22
+}
+
+// MARK: - Shared controls
+
+// Trailing control of a row: a flat pill matching the row backgrounds rather
+// than a system bezel.
+private struct SettingsPillButton: View {
+    let title: String
+
+    var isEnabled = true
+
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14))
+                .foregroundStyle(isEnabled ? .white : Palette.secondaryText)
+                .frame(width: Metrics.controlWidth, height: Metrics.controlHeight)
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Palette.controlBackground)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+    }
+}
+
+private struct SettingsTextField: View {
+    let prompt: String
+
     @Binding
-    var permissionDecision: WKPermissionDecision
+    var text: String
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if text.isEmpty {
+                Text(prompt)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Palette.secondaryText)
+            }
+
+            TextField("", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10)
+        .frame(width: Metrics.textFieldWidth, height: Metrics.controlHeight)
+        .background {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Palette.controlBackground)
+        }
+        .accessibilityLabel(prompt)
+    }
+}
+
+// Trailing control of a row: a fixed-width menu picker whose label lives in the
+// row itself.
+private struct SettingsPicker<Value: Hashable, Content: View>: View {
+    @Binding
+    var selection: Value
+
+    let label: String
+
+    @ViewBuilder
+    let content: Content
+
+    var body: some View {
+        Picker(label, selection: $selection) {
+            content
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .frame(width: Metrics.controlWidth)
+        .accessibilityLabel(label)
+    }
+}
+
+private struct SettingsToggle: View {
+    @Binding
+    var isOn: Bool
 
     let label: String
 
     var body: some View {
-        Picker(selection: $permissionDecision) {
-            Text("Ask").tag(WKPermissionDecision.prompt)
-            Text("Grant").tag(WKPermissionDecision.grant)
-            Text("Deny").tag(WKPermissionDecision.deny)
-        } label: {
-            Text(label)
-        }
+        Toggle(label, isOn: $isOn)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .accessibilityLabel(label)
     }
 }
 
-private struct BinaryValuePicker: View {
-    @Binding
-    var value: Bool
+// MARK: - Rows and groups
 
-    let description: String
+// A single row: a title (optionally with a secondary line beneath it) and a
+// trailing control.
+private struct SettingsRow<Trailing: View>: View {
+    let title: String
 
-    let falseLabel: String
-    let trueLabel: String
+    var subtitle: String? = nil
+
+    /// Marks a row whose value differs from its default, as the feature flags page does.
+    var isEmphasized = false
+
+    @ViewBuilder
+    let trailing: Trailing
 
     var body: some View {
-        Picker(selection: $value) {
-            Text(falseLabel).tag(false)
-            Text(trueLabel).tag(true)
-        } label: {
-            Text(description)
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 15, weight: isEmphasized ? .semibold : .regular))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            trailing
+        }
+        .padding(.horizontal, Metrics.rowInset)
+        .padding(.vertical, 6)
+        .frame(minHeight: Metrics.rowHeight)
+    }
+}
+
+// Rounded container that hairline-separates whatever rows it is given. The rows
+// arrive as subviews, so callers just list them without interleaving separators.
+private struct SettingsCard<Content: View>: View {
+    @ViewBuilder
+    let content: Content
+
+    var body: some View {
+        Group(subviews: content) { subviews in
+            VStack(spacing: 0) {
+                ForEach(Array(subviews.enumerated()), id: \.offset) { index, subview in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Palette.separator)
+                            .frame(height: 1)
+                    }
+
+                    subview
+                }
+            }
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Palette.cardBackground)
         }
     }
 }
+
+private struct SettingsGroupHeader<Accessory: View>: View {
+    let title: String
+
+    @ViewBuilder
+    let accessory: Accessory
+
+    var body: some View {
+        HStack(spacing: 10) {
+            accessory
+                .frame(width: Metrics.groupSymbolWidth)
+
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, Metrics.rowInset)
+    }
+}
+
+// A titled group: symbol and title above a card of rows.
+private struct SettingsGroup<Content: View>: View {
+    let title: String
+
+    let systemImage: String
+
+    @ViewBuilder
+    let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsGroupHeader(title: title) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+
+            SettingsCard {
+                content
+            }
+        }
+    }
+}
+
+// Scrolling body of a page, so every page's groups share the same rhythm and
+// insets.
+private struct SettingsPage<Content: View>: View {
+    @ViewBuilder
+    let content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                content
+            }
+            .padding(.top, 18)
+            .padding(.horizontal, Metrics.contentInset)
+            .padding(.bottom, 24)
+        }
+    }
+}
+
+// MARK: - Pages
 
 private struct GeneralSettingsView: View {
     @AppStorage(AppStorageKeys.homepage)
@@ -83,155 +309,173 @@ private struct GeneralSettingsView: View {
     let currentURL: URL?
 
     var body: some View {
-        Form {
-            Section {
-                TextField("Homepage:", text: $homepage)
+        SettingsPage {
+            SettingsGroup(title: "Homepage", systemImage: "house.fill") {
+                SettingsRow(title: "Homepage") {
+                    SettingsTextField(prompt: "Homepage URL", text: $homepage)
+                }
 
-                Button("Set to Current Page") {
-                    if let currentURL {
-                        homepage = currentURL.absoluteString
-                    } else {
-                        fatalError()
+                SettingsRow(title: "Current Page", subtitle: currentURL?.absoluteString ?? "No page open") {
+                    SettingsPillButton(title: "Set as Homepage", isEnabled: currentURL != nil) {
+                        if let currentURL {
+                            homepage = currentURL.absoluteString
+                        }
                     }
                 }
             }
 
-            Section {
-                PermissionDecisionView(
-                    permissionDecision: $mediaCaptureAuthorization,
-                    label: "Allow sites to access camera:"
-                )
-                .padding(.top)
+            SettingsGroup(title: "Site Permissions", systemImage: "hand.raised.fill") {
+                SettingsRow(title: "Camera Access") {
+                    PermissionDecisionPicker(
+                        permissionDecision: $mediaCaptureAuthorization,
+                        label: "Allow sites to access camera"
+                    )
+                }
 
-                PermissionDecisionView(
-                    permissionDecision: $orientationAndMotionAuthorization,
-                    label: "Allow sites to access sensors:"
-                )
+                SettingsRow(title: "Sensor Access") {
+                    PermissionDecisionPicker(
+                        permissionDecision: $orientationAndMotionAuthorization,
+                        label: "Allow sites to access sensors"
+                    )
+                }
             }
 
-            Section {
-                BinaryValuePicker(
-                    value: $scrollBounceBehaviorBasedOnSize,
-                    description: "Scroll Bounce Behavior",
-                    falseLabel: "Automatic",
-                    trueLabel: "Based on Size"
-                )
+            SettingsGroup(title: "Appearance", systemImage: "macwindow") {
+                SettingsRow(title: "Scroll Bounce Behavior") {
+                    SettingsPicker(selection: $scrollBounceBehaviorBasedOnSize, label: "Scroll Bounce Behavior") {
+                        Text("Automatic").tag(false)
+                        Text("Based on Size").tag(true)
+                    }
+                }
 
-                BinaryValuePicker(
-                    value: $backgroundHidden,
-                    description: "Hidden Background Behavior",
-                    falseLabel: "Automatic",
-                    trueLabel: "Always Hide"
-                )
-            }
+                SettingsRow(title: "Hidden Background Behavior") {
+                    SettingsPicker(selection: $backgroundHidden, label: "Hidden Background Behavior") {
+                        Text("Automatic").tag(false)
+                        Text("Always Hide").tag(true)
+                    }
+                }
 
-            Section {
-                Toggle("Show color in tab bar", isOn: $showColorInTabBar)
-                    .padding(.top)
+                SettingsRow(title: "Show color in tab bar") {
+                    SettingsToggle(isOn: $showColorInTabBar, label: "Show color in tab bar")
+                }
             }
         }
     }
 }
 
-// Feature flags rendered as a `Table` with collapsible category groups via
-// `DisclosureTableRow`, giving real column headers and an outline-style
-// (indented, disclosure-triangle) grouping. Note: the column header row is
-// pinned, but the category (disclosure) rows scroll with their content —
-// `Table` has no sticky group-header support.
-private struct FeatureFlagsTableView: View {
+private struct PermissionDecisionPicker: View {
+    @Binding
+    var permissionDecision: WKPermissionDecision
+
+    let label: String
+
+    var body: some View {
+        SettingsPicker(selection: $permissionDecision, label: label) {
+            Text("Ask").tag(WKPermissionDecision.prompt)
+            Text("Grant").tag(WKPermissionDecision.grant)
+            Text("Deny").tag(WKPermissionDecision.deny)
+        }
+    }
+}
+
+// Feature flags are rendered as one collapsible card per category, matching the
+// grouped rows of the other pages. The status of each feature is shown as the
+// row's secondary line, and its name is emphasized when its value has been
+// changed from the default.
+private struct FeatureFlagsView: View {
     @Environment(FeatureFlagsModel.self)
     var model
 
     @State
     private var collapsedCategories: Set<UInt> = []
 
-    // `DisclosureTableRow` requires the label row and its child rows to share a
-    // single `TableRowValue`, so both categories and features are wrapped here.
-    private struct Row: Identifiable {
-        enum Kind {
-            case category(WebFeatureCategory)
-            case feature(_WKFeature)
-        }
-
-        let kind: Kind
-
-        var id: String {
-            switch kind {
-            case .category(let category): "category-\(category.rawValue)"
-            case .feature(let feature): feature.id
-            }
-        }
-    }
-
     private var groupedFeatures: FeatureFlagsModel.GroupedFeatures {
         model.groups(filteredBy: model.searchQuery)
     }
 
-    private func expansion(for category: WebFeatureCategory) -> Binding<Bool> {
-        Binding(
-            get: { !collapsedCategories.contains(category.rawValue) },
-            set: { isExpanded in
-                if isExpanded {
-                    collapsedCategories.remove(category.rawValue)
-                } else {
-                    collapsedCategories.insert(category.rawValue)
-                }
-            }
-        )
+    private func isExpanded(_ category: WebFeatureCategory) -> Bool {
+        !collapsedCategories.contains(category.rawValue)
+    }
+
+    private func toggleExpansion(of category: WebFeatureCategory) {
+        if collapsedCategories.contains(category.rawValue) {
+            collapsedCategories.remove(category.rawValue)
+        } else {
+            collapsedCategories.insert(category.rawValue)
+        }
     }
 
     var body: some View {
         @Bindable
         var model = model
 
-        Table(of: Row.self) {
-            TableColumn("Feature") { row in
-                switch row.kind {
-                case .category(let category):
-                    Text(category.description)
-                        .font(.headline)
-                case .feature(let feature):
-                    Text(feature.name)
-                        .bold((model.customizedFeatures[feature.key] ?? feature.defaultValue) != feature.defaultValue)
-                }
+        SettingsPage {
+            let groups = groupedFeatures
+
+            if groups.isEmpty {
+                Text("No matching features")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Palette.secondaryText)
+                    .padding(.leading, Metrics.rowInset)
             }
 
-            TableColumn("Enabled") { row in
-                if case .feature(let feature) = row.kind {
-                    Toggle("", isOn: $model.customizedFeatures[feature.key, default: feature.defaultValue])
-                        .labelsHidden()
-                        .toggleStyle(.checkbox)
-                }
-            }
-            .width(60)
-            .alignment(.center)
+            ForEach(groups, id: \.category.rawValue) { group in
+                VStack(alignment: .leading, spacing: 10) {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            toggleExpansion(of: group.category)
+                        }
+                    } label: {
+                        SettingsGroupHeader(title: group.category.description) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Palette.secondaryText)
+                                .rotationEffect(.degrees(isExpanded(group.category) ? 90 : 0))
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(group.category.description)
+                    .accessibilityHint(isExpanded(group.category) ? "Collapse category" : "Expand category")
 
-            TableColumn("Status") { row in
-                if case .feature(let feature) = row.kind {
-                    Text(feature.status.description)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .width(min: 80, ideal: 90)
-        } rows: {
-            ForEach(groupedFeatures, id: \.category.rawValue) { group in
-                DisclosureTableRow(Row(kind: .category(group.category)), isExpanded: expansion(for: group.category)) {
-                    ForEach(group.features) { feature in
-                        TableRow(Row(kind: .feature(feature)))
+                    if isExpanded(group.category) {
+                        SettingsCard {
+                            ForEach(group.features) { feature in
+                                SettingsRow(
+                                    title: feature.name,
+                                    subtitle: feature.status.description,
+                                    isEmphasized: (model.customizedFeatures[feature.key] ?? feature.defaultValue)
+                                        != feature.defaultValue
+                                ) {
+                                    SettingsToggle(
+                                        isOn: $model.customizedFeatures[feature.key, default: feature.defaultValue],
+                                        label: feature.name
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        .searchable(text: $model.searchQuery, prompt: "Search")
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack {
-                Spacer()
-                Button("Reset Feature Flags") {
+                Spacer(minLength: 0)
+
+                SettingsPillButton(title: "Reset Feature Flags") {
                     model.customizedFeatures.removeAll()
                 }
             }
-            .padding()
-            .background(.bar)
+            .padding(.horizontal, Metrics.contentInset)
+            .padding(.vertical, 12)
+            .background {
+                Palette.detailBackground
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(Palette.separator)
+                            .frame(height: 1)
+                    }
+            }
         }
         .onChange(of: model.customizedFeatures, model.update)
     }
@@ -254,17 +498,244 @@ private struct DebugOverlaysView: View {
     private var enhancedSecurityRegion = false
 
     var body: some View {
-        Form {
-            Section("Region Overlays") {
-                Toggle("Non-fast Scrollable Region", isOn: $nonFastScrollableRegion)
-                Toggle("Wheel Event Handler Region", isOn: $wheelEventHandlerRegion)
-                Toggle("Touch Action Region", isOn: $touchActionRegion)
-                Toggle("Interaction Region", isOn: $interactionRegion)
-                Toggle("Enhanced Security Region", isOn: $enhancedSecurityRegion)
+        SettingsPage {
+            SettingsGroup(title: "Region Overlays", systemImage: "square.dashed") {
+                SettingsRow(title: "Non-fast Scrollable Region") {
+                    SettingsToggle(isOn: $nonFastScrollableRegion, label: "Non-fast Scrollable Region")
+                }
+
+                SettingsRow(title: "Wheel Event Handler Region") {
+                    SettingsToggle(isOn: $wheelEventHandlerRegion, label: "Wheel Event Handler Region")
+                }
+
+                SettingsRow(title: "Touch Action Region") {
+                    SettingsToggle(isOn: $touchActionRegion, label: "Touch Action Region")
+                }
+
+                SettingsRow(title: "Interaction Region") {
+                    SettingsToggle(isOn: $interactionRegion, label: "Interaction Region")
+                }
+
+                SettingsRow(title: "Enhanced Security Region") {
+                    SettingsToggle(isOn: $enhancedSecurityRegion, label: "Enhanced Security Region")
+                }
             }
         }
     }
 }
+
+// MARK: - Sidebar
+
+private struct SidebarIcon: View {
+    let systemImage: String
+
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(color)
+            .frame(width: 28, height: 28)
+            .overlay {
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+    }
+}
+
+private struct SidebarRow: View {
+    let section: SettingsSection
+
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SidebarIcon(systemImage: section.systemImage, color: section.iconColor)
+
+            Text(section.title)
+                .font(.system(size: 15))
+                .foregroundStyle(.white)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isSelected ? Palette.sidebarSelection : .clear)
+        }
+        .contentShape(.rect)
+    }
+}
+
+private struct Sidebar: View {
+    @Binding
+    var selection: SettingsSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Left free for the window's close/minimize/zoom buttons.
+            Color.clear
+                .frame(height: Metrics.titleBarHeight)
+
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(SettingsSection.allCases) { section in
+                    Button {
+                        selection = section
+                    } label: {
+                        SidebarRow(section: section, isSelected: section == selection)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 8)
+
+            Spacer(minLength: 24)
+        }
+        .padding(.horizontal, 10)
+        .frame(width: Metrics.sidebarWidth, alignment: .leading)
+        .background(Palette.sidebarBackground)
+    }
+}
+
+// MARK: - Title bar
+
+private struct SettingsSearchField: View {
+    @Binding
+    var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Palette.secondaryText)
+
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text("Search")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Palette.secondaryText)
+                }
+
+                TextField("", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white)
+            }
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Palette.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear Search")
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(width: Metrics.searchFieldWidth, height: Metrics.titleBarControlHeight)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Palette.searchFieldBackground)
+        }
+    }
+}
+
+// Fixed-height header drawn at the top of the detail column, so content starts
+// at the same vertical offset no matter which page is selected. Its title shares
+// the window controls' center line, as does the search field that pages which
+// support searching put in the window's toolbar.
+//
+// Applied as a top safe area inset rather than as a sibling above the page, so
+// that a page's rows scroll underneath it instead of over it: scroll views
+// extend their content into the (transparent) titlebar band, and only a safe
+// area inset both insets that content and draws above it. Its background is
+// therefore opaque.
+//
+// The header holds nothing interactive on purpose. With `.fullSizeContentView`
+// the window's titlebar sits above the content view and consumes mouse events
+// over this band, so a control drawn here cannot be clicked; the title is only
+// text, and clicks on it drag the window as they would in any titlebar.
+private struct SettingsContentHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .fixedSize()
+
+            Spacer(minLength: 0)
+        }
+        .frame(height: Metrics.titleBarHeight)
+        .padding(.leading, Metrics.contentInset)
+        .background(Palette.detailBackground)
+    }
+}
+
+// MARK: - Window chrome
+
+// Strips the Settings window's titlebar down to just the window controls: no
+// title text, no backing, no separator, and content extending into the titlebar
+// region so the page header occupies that band.
+private struct SettingsWindowConfigurator: NSViewRepresentable {
+    // Configuring from `viewDidMoveToWindow` rather than `updateNSView` avoids
+    // having to wait for the view to be added to a window.
+    final class ConfiguringView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            configureWindow()
+        }
+
+        func configureWindow() {
+            // `NSView.window` is an `unowned(unsafe)` reference, which the
+            // project's strict memory safety mode requires acknowledging.
+            guard let window = unsafe window else {
+                return
+            }
+
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.titlebarSeparatorStyle = .none
+            window.isMovableByWindowBackground = true
+
+            // Lets content occupy the titlebar region, so the page header can
+            // sit alongside the window controls.
+            window.styleMask.insert(.fullSizeContentView)
+
+            // A unified toolbar makes the titlebar tall enough for the window
+            // controls to be centered on the header's line
+            // (`Metrics.titleBarHeight`); without it they sit well above the
+            // title. The content ignores the safe area the toolbar adds, so it
+            // still starts at the top of the window.
+            //
+            // Pages that search contribute a toolbar item, in which case SwiftUI
+            // supplies the toolbar; an empty one stands in for the other pages so
+            // that the titlebar keeps its height as pages change.
+            window.toolbarStyle = .unified
+
+            if window.toolbar == nil {
+                window.toolbar = NSToolbar()
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> ConfiguringView {
+        ConfiguringView(frame: .zero)
+    }
+
+    func updateNSView(_ view: ConfiguringView, context: Context) {
+        // Reapplied because SwiftUI can reset titlebar state as the selected
+        // page changes.
+        view.configureWindow()
+    }
+}
+
+// MARK: - Settings
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case general
@@ -283,10 +754,22 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .general: "gear"
-        case .featureFlags: "flag.filled.and.flag.crossed"
-        case .debugOverlays: "squareshape.split.2x2.dotted.inside.and.outside"
+        case .general: "gearshape.fill"
+        case .featureFlags: "flag.fill"
+        case .debugOverlays: "square.dashed"
         }
+    }
+
+    var iconColor: Color {
+        switch self {
+        case .general: Color(white: 0.38)
+        case .featureFlags: Color(red: 0.04, green: 0.52, blue: 1.0)
+        case .debugOverlays: Color(red: 0.61, green: 0.36, blue: 0.85)
+        }
+    }
+
+    var isSearchable: Bool {
+        self == .featureFlags
     }
 }
 
@@ -296,30 +779,56 @@ struct SettingsView: View {
     @State
     private var selection: SettingsSection = .general
 
+    // Owned here rather than created per appearance so the header's search field
+    // can bind to it, and so search text survives switching pages.
+    @State
+    private var featureFlagsModel = FeatureFlagsModel()
+
     var body: some View {
-        NavigationSplitView {
-            List(SettingsSection.allCases, selection: $selection) { section in
-                Label(section.title, systemImage: section.systemImage)
-                    .tag(section)
-            }
-            .navigationSplitViewColumnWidth(215)
-            .toolbar(removing: .sidebarToggle)
-        } detail: {
+        @Bindable
+        var featureFlagsModel = featureFlagsModel
+
+        HStack(spacing: 0) {
+            Sidebar(selection: $selection)
+
             Group {
                 switch selection {
                 case .general:
                     GeneralSettingsView(currentURL: currentURL)
                 case .featureFlags:
-                    FeatureFlagsTableView()
-                        .environment(FeatureFlagsModel())
+                    FeatureFlagsView()
+                        .environment(self.featureFlagsModel)
                 case .debugOverlays:
                     DebugOverlaysView()
                 }
             }
-            .navigationTitle(selection.title)
-            .frame(minWidth: 400, minHeight: 400, idealHeight: 500, maxHeight: .infinity)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SettingsContentHeader(title: selection.title)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Palette.detailBackground)
         }
-        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 700, idealWidth: 810, minHeight: 480, idealHeight: 660)
+        .background(Palette.detailBackground)
+        // Both columns draw into the titlebar region, which the window
+        // configurator above has made transparent and title-less.
+        .ignoresSafeArea(.container, edges: .top)
+        .preferredColorScheme(.dark)
+        // The search field lives in the toolbar, not in the page header, because
+        // the titlebar consumes clicks over the content beneath it. The item is
+        // declared for every page so that the toolbar — and with it the height of
+        // the titlebar the window controls are centered in — does not come and go.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if selection.isSearchable {
+                    SettingsSearchField(text: $featureFlagsModel.searchQuery)
+                }
+            }
+        }
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .background {
+            SettingsWindowConfigurator()
+        }
     }
 }
 
@@ -328,7 +837,12 @@ struct SettingsView: View {
 }
 
 #Preview("Feature Flags") {
-    FeatureFlagsTableView()
+    FeatureFlagsView()
         .environment(FeatureFlagsModel())
-        .frame(width: 520, height: 520)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SettingsContentHeader(title: "Feature Flags")
+        }
+        .frame(width: 590, height: 620)
+        .background(Palette.detailBackground)
+        .preferredColorScheme(.dark)
 }
