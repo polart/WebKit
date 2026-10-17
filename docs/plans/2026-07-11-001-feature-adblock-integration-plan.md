@@ -365,7 +365,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
 - **Goal:** Ship real filter lists and the scriptlet resource library, sourced from [`brave/adblock-resources`](https://github.com/brave/adblock-resources), so the engine blocks out of the box instead of only against hand-fed rules.
 - **Requirements:** R6; success criteria 1-4 in their "with real lists" form.
 - **Dependencies:** U9, U10.
-- **Files:** `Source/WebKit/NetworkProcess/AdBlock/AdBlockCatalog.{h,cpp}` (new), `AdBlockListStore.{h,cpp}`, `NetworkProcess.messages.in` + `NetworkProcess.{h,cpp}`, `WebsiteDataStore.{h,cpp}`, `WKWebsiteDataStore{Private.h,.mm}`, `Tools/Scripts/update-adblock-resources` (new), `Tools/NewBrowser/Resources/AdBlock/{resources,list_catalog}.json` (generated, checked in), `Tools/NewBrowser/Source/ViewModel/AdBlockModel.swift` (new), `Tools/NewBrowser/Source/Views/SettingsView.swift`.
+- **Files:** `Source/WebKit/NetworkProcess/AdBlock/AdBlockCatalog.{h,cpp}` (new), `AdBlockListStore.{h,cpp}`, `NetworkProcess.messages.in` + `NetworkProcess.{h,cpp}`, `WebsiteDataStore.{h,cpp}`, `WKWebsiteDataStore{Private.h,.mm}`, `Tools/Scripts/update-adblock-resources` + `update-adblock-resources-scriptlets.mjs` (new), `Source/ThirdParty/AdblockRust/examples/assemble_web_accessible_resources.rs` (new), `Source/ThirdParty/AdblockRust/tests/bundled_resources.rs` (new), `Tools/NewBrowser/Resources/AdBlock/{resources,list_catalog}.json` + `THIRD_PARTY_NOTICES.txt` + `uBlock-LICENSE.txt` (generated, checked in), `Source/WebKit/WebProcess/AdBlock/AdBlockPageAgent.cpp` (scriptlet globals wrapper), `Tools/NewBrowser/Source/ViewModel/AdBlockModel.swift` (new), `Tools/NewBrowser/Source/Views/SettingsView.swift`.
 
 #### What adblock-resources supplies
 
@@ -373,7 +373,7 @@ Two independent artifacts, which Brave delivers as two Component Updater compone
 
 | Artifact | Upstream | Consumed by |
 |---|---|---|
-| `resources.json` | `metadata.json` + `resources/`, as its `readResources()` assembles them | `_setAdBlockResources:` → `new_resource_storage()` |
+| `resources.json` | uBO redirect resources + `metadata.json`/`resources/` (as its `readResources()` assembles them) + uBO scriptlets — see below | `_setAdBlockResources:` → `new_resource_storage()` |
 | `list_catalog.json` | `filter_lists/list_catalog.json` | `_setAdBlockCatalog:` → `parseAdBlockCatalog` |
 
 #### Design
@@ -383,14 +383,17 @@ Two independent artifacts, which Brave delivers as two Component Updater compone
 - **Permission masks finally flow.** Catalog lists compile with `AdBlockCatalogEntry::permissionMask` (21 of 62 entries declare `1`), so trusted uBO scriptlets in the default lists can actually inject. User-added subscriptions stay pinned at the most-restrictive 0.
 - **Enablement mirrors Brave's `IsFilterListEnabled`:** `hidden && default_enabled` is force-on with no user override; otherwise a remembered user choice wins over the catalog default; `platforms` excludes the iOS-only entry on macOS; `langs` preselects matching lists exactly once per profile (Brave's `kAdBlockCheckedAllDefaultRegions`).
 - **A re-sent catalog is a no-op.** The catalog is delivered on every launch, so the store fingerprints the document (SHA-256) and skips the rebuild when it matches, preserving the warm `.dat` startup (R7) that an unconditional recompile would throw away.
+- **The resource library is assembled like Brave's `generateResources()`** (brave-core-crx-packager `lib/adBlockRustUtils.js`): uBO redirect resources, then the Brave resources, then uBO's scriptlet library, from a `gorhill/uBlock` checkout pinned to a release tag (default `../uBlock`). The redirect half runs adblock-rust's `assemble_web_accessible_resources` via an example in the AdblockRust crate, so it uses the engine version WebKit links; the scriptlet half has to import uBO's ES module in Node, because the scriptlet sources only exist as live functions (`fn.toString()`). Brave's exclusion of `google-ima-dai.js` is mirrored. Two refinements over Brave's transform, both supported by adblock 0.12: `*.fn` helpers get MIME `fn/javascript` (dependency-only, never injectable or redirectable), and `requiresTrust` scriptlets get permission bit 0, so only catalog lists declaring `permission_mask: 1` can use them. The generator fails on name/alias collisions and missing dependencies, which the engine would otherwise skip silently. With uBO 1.75.0: 213 resources (45 + 17 + 151); every `+js()` rule in the default list resolves.
+- **Scriptlets run inside Brave's `scriptletGlobals` wrapper.** uBO's `safeSelf()` reads `scriptletGlobals`, so `AdBlockPageAgent::injectPendingScriptlet` now wraps `injected_script` in a function scope defining it (ported from Brave's `kScriptletGlobalsScript`, with `canDebug` unset and `deAmpEnabled = false`). This resolves the U7 review finding below.
+- **The uBO code is bundled, under GPL-3.0.** Every license in the tree (BSD-2, LGPL-2.1, MPL-2.0 without the incompatibility notice) can be combined with GPL-3.0, so for an open-source browser shipped outside the Mac App Store, bundling is simpler than Brave's separate component delivery. The generator writes `THIRD_PARTY_NOTICES.txt` (uBO version and commit) and copies uBO's `LICENSE.txt`; both ship in the app bundle. See `LICENSE.md`.
 - **Delivery lives in the app, not WebKit.** `AdBlockModel` bundles both files with NewBrowser and pushes them over the SPI, the same split Brave draws between its component layer and the shields engine. It also drives the 100-minute refresh cadence Brave uses, and backs a Content Blocking settings page.
 
 #### Known gaps
 
-- **uBO resources are not in `resources.json`.** Only the 17 Brave-authored scriptlets are. Brave merges uBlock Origin's scriptlets and redirect resources at packaging time from a uAssets checkout via adblock-rust's `resource-assembler` feature (already enabled in `Source/ThirdParty/AdblockRust`). Until that is wired up, rules naming a uBO scriptlet or redirect resolve to nothing.
+- **uBO's `ISOLATED`-world scriptlets run in the main world.** uBO tags 22 scriptlets (`set-attr`, `set-cookie`, `href-sanitizer`, …) to run in an isolated world; the engine's `injected_script` is a single script, and U7 runs it in the page's world. They work there, but page scripts can observe them.
+- **Updating the resource library needs an app release.** It is bundled, not fetched; refresh it by re-running `update-adblock-resources` against a newer uBO tag.
 - **No per-source integrity.** Brave gets it from CRX signing; direct source fetches have only TLS. The `expectedHash` pin cannot help, since these lists change daily.
 - **`first_party_protections` is parsed but inert.** Brave routes those lists into a separate engine with first-party heuristics; this fork compiles exactly one engine (KTD4).
-- **Licensing.** adblock-resources is MPL-2.0, but an assembled `resources.json` would embed GPL-3.0 uBO scriptlets. Brave never bundles those — they arrive as component data. Prefer downloading the merged library at runtime over bundling it.
 
 #### Test scenarios
 
@@ -504,7 +507,7 @@ Review of the U5 CSP hook (commit `5cbfac5d6ddf`). Two findings were fixed in-br
 
 Review of the U7 scriptlet-injection hook (commit `62ef9d8`). One finding was fixed in-branch: a scriptlet stashed for an uncommitted navigation (204/download/cancelled) could run on a later unrelated document on the same frame — now cleared at provisional-load start (commit `f961ea7`). The one below remains an open follow-up.
 
-- **U7 injects the raw engine `injected_script` without uBO's scriptlet wrapper (`scriptletGlobals`/`canDebug`/de-AMP)** — U7 (P2, parity, confidence 75)
+- **U7 injects the raw engine `injected_script` without uBO's scriptlet wrapper (`scriptletGlobals`/`canDebug`/de-AMP)** — U7 (P2, parity, confidence 75) — **resolved in U11** (`wrapScriptletWithGlobals` in `AdBlockPageAgent.cpp`)
 
   Brave does not `ExecuteScript` the engine's `injected_script` as-is: it wraps it in `kScriptletInitScript` (`brave-core/components/cosmetic_filters/renderer/cosmetic_filters_js_handler.cc`), which injects a `<script>` element carrying a per-page `scriptletGlobals` (a `Proxy`-wrapped `Map` for cross-scriptlet shared state), a `canDebug` flag gated on the scriptlet-debug feature, and a `deAmpEnabled` boolean — the runtime context uBO's stock scriptlets are authored against. U7 (`AdBlockPageAgent::injectPendingScriptlet` → `executeScriptInWorldIgnoringException`) injects the string raw. As long as the bundled resource library ships self-contained scriptlets this works, but any stock uBO scriptlet that reads `scriptletGlobals`/`canDebug`/`deAmpEnabled` will silently misbehave. Before shipping a real uBO resource set (U9), confirm whether any bundled scriptlet depends on the wrapper; if so, reproduce the `kScriptletInitScript` wrapper semantics at injection time (de-AMP can be hardcoded off until that feature exists). Main-world execution parity itself is already met — Brave reaches the main world via the injected `<script>` element; U7 reaches it directly.
 

@@ -3,8 +3,7 @@
 # Copyright (C) 2026 the WebKit adblock integration authors.
 # SPDX-License-Identifier: MPL-2.0
 #
-# Regenerates the two adblock data files the browser ships, from a checkout of
-# brave/adblock-resources:
+# Regenerates the adblock data files the browser ships:
 #
 #   resources.json    the scriptlet/redirect resource library, consumed by
 #                     -[WKWebsiteDataStore _setAdBlockResources:] and handed to
@@ -12,34 +11,51 @@
 #   list_catalog.json the filter list catalog, consumed by
 #                     -[WKWebsiteDataStore _setAdBlockCatalog:] and parsed by
 #                     AdBlockCatalog.
+#   THIRD_PARTY_NOTICES.txt and uBlock-LICENSE.txt
+#                     the license terms for the bundled uBlock Origin code.
 #
-# This is the offline half of what Brave's brave-core-crx-packager does before
-# publishing the "Brave Ad Block Resources Library" and "Brave Ad Block List
-# Catalog" components. We have no component updater, so the files are checked in
-# and bundled with the browser instead, and re-run of this script is how they
-# are updated.
+# This is the offline equivalent of what Brave's brave-core-crx-packager does
+# before publishing the "Brave Ad Block Resources Library" and "Brave Ad Block
+# List Catalog" components. We have no component updater, so the files are
+# checked in and bundled with the browser instead, and re-running this script is
+# how they are updated.
 #
-# resources.json is built the way adblock-resources' own index.js does it
-# (metadata.json entries, with resourcePath replaced by the base64 of the file's
-# bytes) rather than copied from its dist/, so a dist/ that is stale relative to
-# resources/ cannot be shipped by accident — the same drift its verify.js
-# guards against.
+# resources.json is assembled the way Brave's generateResources() does it, from
+# three sources, in this order:
 #
-# NOT YET INCLUDED: uBlock Origin's own scriptlets and redirect resources. Brave
-# merges those into the same resources.json at packaging time, assembling them
-# from a uAssets checkout via adblock-rust's `resource-assembler` feature (which
-# Source/ThirdParty/AdblockRust already enables). Until that is wired up, rules
-# calling a uBO-provided scriptlet or redirect resolve to nothing; only the
-# Brave-authored resources below are available.
+#   1. uBlock Origin's redirect resources (src/web_accessible_resources, indexed
+#      by src/js/redirect-resources.js), assembled by adblock-rust's
+#      resource-assembler via the AdblockRust crate's
+#      assemble_web_accessible_resources example.
+#   2. brave/adblock-resources, built from metadata.json + resources/ the way its
+#      own index.js does it, rather than copied from its dist/, so a dist/ that
+#      is stale relative to resources/ cannot be shipped by accident.
+#   3. uBlock Origin's scriptlet library, extracted from its ES module by
+#      update-adblock-resources-scriptlets.mjs (needs Node).
+#
+# Requirements: checkouts of brave/adblock-resources and gorhill/uBlock (pinned
+# to a release tag), Node, and mise (for the Rust toolchain the AdblockRust
+# crate pins).
+#
+# The uBlock Origin parts are GPL-3.0. See THIRD_PARTY_NOTICES.txt.
 
 import argparse
 import base64
 import json
 import os
+import shutil
+import subprocess
 import sys
 
 DEFAULT_SOURCE = os.path.join("..", "adblock-resources")
+DEFAULT_UBLOCK = os.path.join("..", "uBlock")
 DEFAULT_OUTPUT = os.path.join("Tools", "NewBrowser", "Resources", "AdBlock")
+ADBLOCK_CRATE = os.path.join("Source", "ThirdParty", "AdblockRust")
+SCRIPTLET_EXTRACTOR = os.path.join("Tools", "Scripts", "update-adblock-resources-scriptlets.mjs")
+
+# Brave's generateResources() drops this one uBO redirect resource; mirror it so
+# the library matches what Brave ships.
+EXCLUDED_UBLOCK_RESOURCES = {"google-ima-dai.js"}
 
 
 def repository_root():
@@ -83,6 +99,110 @@ def build_resources(source):
     return resources
 
 
+def run_json(command, cwd):
+    try:
+        output = subprocess.run(command, cwd=cwd, check=True, capture_output=True, text=True).stdout
+    except FileNotFoundError:
+        sys.exit("'%s' is not installed" % command[0])
+    except subprocess.CalledProcessError as error:
+        sys.exit("%s failed:\n%s" % (" ".join(command), error.stderr))
+    return json.loads(output)
+
+
+def build_ublock_redirect_resources(root, ublock):
+    resources = run_json(
+        ["mise", "exec", "--", "cargo", "run", "--quiet", "--example", "assemble_web_accessible_resources", "--", ublock],
+        os.path.join(root, ADBLOCK_CRATE))
+    return [resource for resource in resources if resource["name"] not in EXCLUDED_UBLOCK_RESOURCES]
+
+
+def build_ublock_scriptlets(root, ublock):
+    return run_json(["node", os.path.join(root, SCRIPTLET_EXTRACTOR), ublock], root)
+
+
+def validate_library(resources):
+    """The engine silently skips a resource whose name or alias is already
+    taken, and a scriptlet whose dependency is missing fails at injection time;
+    catch both here instead."""
+    owners = {}
+    for resource in resources:
+        for name in [resource["name"]] + resource.get("aliases", []):
+            if name in owners:
+                sys.exit("resource name '%s' is claimed by both %s and %s" % (name, owners[name], resource["name"]))
+            owners[name] = resource["name"]
+
+    names = {resource["name"] for resource in resources}
+    for resource in resources:
+        for dependency in resource.get("dependencies", []):
+            if dependency not in names:
+                sys.exit("%s depends on missing resource %s" % (resource["name"], dependency))
+
+
+def git_revision(checkout):
+    def git(*arguments):
+        return subprocess.run(["git", "-C", checkout] + list(arguments),
+                              check=True, capture_output=True, text=True).stdout.strip()
+    revision = git("rev-parse", "HEAD")
+    if git("status", "--porcelain", "--untracked-files=no"):
+        sys.exit("%s has local changes; check out a clean release tag" % checkout)
+    try:
+        tag = git("describe", "--tags", "--exact-match")
+    except subprocess.CalledProcessError:
+        tag = None
+    return revision, tag
+
+
+def write_notices(output, ublock, ublock_revision, ublock_tag, brave_revision, counts):
+    shutil.copyfile(os.path.join(ublock, "LICENSE.txt"), os.path.join(output, "uBlock-LICENSE.txt"))
+
+    version = "%s (%s)" % (ublock_tag, ublock_revision) if ublock_tag else ublock_revision
+    with open(os.path.join(output, "THIRD_PARTY_NOTICES.txt"), "w", encoding="utf-8") as handle:
+        handle.write(NOTICES_TEMPLATE.format(
+            ublock_version=version,
+            ublock_revision=ublock_revision,
+            brave_revision=brave_revision,
+            **counts))
+
+
+NOTICES_TEMPLATE = """Third-party code in the ad blocking resource library (resources.json)
+=====================================================================
+
+This file is generated by Tools/Scripts/update-adblock-resources. Do not edit.
+
+resources.json is a data file. The ad blocking engine injects the scriptlets it
+contains into web pages, and serves its redirect resources in place of blocked
+requests. It is assembled from the following components, each under its own
+license. The code is stored base64-encoded; it is not compiled or minified, so
+each entry's decoded content is its complete source code.
+
+
+uBlock Origin
+-------------
+
+{ublock_redirects} redirect resources (src/web_accessible_resources) and
+{ublock_scriptlets} scriptlets (src/js/resources)
+
+Copyright (C) Raymond Hill and contributors
+License: GNU General Public License v3.0 (see uBlock-LICENSE.txt)
+Source:  https://github.com/gorhill/uBlock
+Version: {ublock_version}
+         https://github.com/gorhill/uBlock/tree/{ublock_revision}
+
+The scriptlets are uBO's functions as returned by Function.prototype.toString();
+helper functions are listed separately and joined back together by the engine.
+
+
+Brave adblock-resources
+-----------------------
+
+{brave} resources
+
+Copyright (C) Brave Software, Inc. and contributors
+License: Mozilla Public License 2.0 (https://mozilla.org/MPL/2.0/)
+Source:  https://github.com/brave/adblock-resources/tree/{brave_revision}
+"""
+
+
 def load_catalog(source):
     catalog_path = os.path.join(source, "filter_lists", "list_catalog.json")
     with open(catalog_path, encoding="utf-8") as handle:
@@ -114,32 +234,54 @@ def write_json(path, value):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Regenerate resources.json and list_catalog.json from a brave/adblock-resources checkout.")
+        description="Regenerate the bundled adblock resource library, filter list catalog, and notices.")
     parser.add_argument("--source", default=DEFAULT_SOURCE,
                         help="path to a brave/adblock-resources checkout (default: %(default)s)")
+    parser.add_argument("--ublock", default=DEFAULT_UBLOCK,
+                        help="path to a gorhill/uBlock checkout at a release tag (default: %(default)s)")
     parser.add_argument("--output", default=DEFAULT_OUTPUT,
                         help="directory to write into, relative to the repository root (default: %(default)s)")
     arguments = parser.parse_args()
 
     root = repository_root()
     source = arguments.source if os.path.isabs(arguments.source) else os.path.join(root, arguments.source)
+    ublock = os.path.abspath(arguments.ublock if os.path.isabs(arguments.ublock) else os.path.join(root, arguments.ublock))
     output = arguments.output if os.path.isabs(arguments.output) else os.path.join(root, arguments.output)
 
     if not os.path.isdir(source):
         sys.exit("no adblock-resources checkout at %s (pass --source)" % source)
+    if not os.path.isdir(ublock):
+        sys.exit("no uBlock checkout at %s (pass --ublock)" % ublock)
 
-    resources = build_resources(source)
+    ublock_revision, ublock_tag = git_revision(ublock)
+    if not ublock_tag:
+        print("warning: %s is not at a release tag" % ublock, file=sys.stderr)
+    brave_revision, _ = git_revision(source)
+
+    ublock_redirects = build_ublock_redirect_resources(root, ublock)
+    brave_resources = build_resources(source)
+    ublock_scriptlets = build_ublock_scriptlets(root, ublock)
+
+    resources = ublock_redirects + brave_resources + ublock_scriptlets
+    validate_library(resources)
     catalog = load_catalog(source)
 
     os.makedirs(output, exist_ok=True)
     resources_size = write_json(os.path.join(output, "resources.json"), resources)
     catalog_size = write_json(os.path.join(output, "list_catalog.json"), catalog)
+    write_notices(output, ublock, ublock_revision, ublock_tag, brave_revision, {
+        "ublock_redirects": len(ublock_redirects),
+        "ublock_scriptlets": len(ublock_scriptlets),
+        "brave": len(brave_resources),
+    })
 
     enabled = sum(1 for entry in catalog if entry.get("default_enabled"))
     sources = sum(len(entry["sources"]) for entry in catalog)
 
     print("wrote %s" % os.path.relpath(output, root))
-    print("  resources.json     %d resources, %d bytes" % (len(resources), resources_size))
+    print("  resources.json     %d resources (%d uBO redirects, %d Brave, %d uBO scriptlets), %d bytes"
+          % (len(resources), len(ublock_redirects), len(brave_resources), len(ublock_scriptlets), resources_size))
+    print("  uBlock Origin      %s" % (ublock_tag or ublock_revision))
     print("  list_catalog.json  %d lists (%d enabled by default, %d sources), %d bytes"
           % (len(catalog), enabled, sources, catalog_size))
 

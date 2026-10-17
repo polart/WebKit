@@ -123,7 +123,9 @@ See U11 in
 [the adblock integration plan](plans/2026-07-11-001-feature-adblock-integration-plan.md)
 for the port. The short version: there is no Component Updater here, so the
 catalog and resource library are generated from an `adblock-resources` checkout
-by `Tools/Scripts/update-adblock-resources`, checked in under
+plus a uBlock Origin checkout (for uBO's scriptlets and redirect resources, as
+Brave's packager merges them) by `Tools/Scripts/update-adblock-resources`,
+checked in under
 `Tools/NewBrowser/Resources/AdBlock/`, and bundled with the browser; each
 catalog entry's filter text is then fetched directly from its `sources[]` URLs
 over HTTPS and concatenated, in place of the per-list CRX component. The

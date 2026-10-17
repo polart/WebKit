@@ -36,6 +36,8 @@
 			membershipExceptions = (
 				AdBlock/list_catalog.json,
 				AdBlock/resources.json,
+				AdBlock/THIRD_PARTY_NOTICES.txt,
+				AdBlock/uBlock-LICENSE.txt,
 				Assets.xcassets,
 			);
 			target = 07A58BD32D0400B300CAB4ED /* NewBrowser */;
