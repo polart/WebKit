@@ -29,6 +29,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebKit {
 
@@ -39,6 +40,47 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(AdBlockPageAgent);
 // de-duplicates by selector id within a sheet, so a shared identifier would make
 // the dynamic ids (which restart per document) collide with the static ones.
 static constexpr auto dynamicCosmeticIdentifier = "WebKitAdBlockCosmeticDynamic"_s;
+
+// Wraps the engine's `injected_script` in the runtime context uBlock Origin's
+// scriptlets are written against: `scriptletGlobals` (a Proxy-wrapped Map that
+// safeSelf() and friends read, e.g. `scriptletGlobals.bcSecret`) and
+// `deAmpEnabled`. Without it nearly every uBO scriptlet throws a ReferenceError.
+// The function scope also keeps both names off the page's global object.
+//
+// Ported from Brave's kScriptletGlobalsScript
+// (brave-core/components/cosmetic_filters/common/scriptlet_constants.cc):
+//   Copyright (c) 2026 The Brave Authors. All rights reserved.
+//   This Source Code Form is subject to the terms of the Mozilla Public
+//   License, v. 2.0. If a copy of the MPL was not distributed with this file,
+//   You can obtain one at https://mozilla.org/MPL/2.0/.
+// `canDebug` is left unset (Brave sets it only behind a scriptlet-debug flag),
+// and de-AMP is off until that feature exists.
+static String wrapScriptletWithGlobals(const String& script)
+{
+    return makeString(
+        "(function() {"
+            "const scriptletGlobals = (() => {"
+                "const forwardedMapMethods = [\"has\", \"get\", \"set\"];"
+                "const handler = {"
+                    "get(target, prop) {"
+                        "if (forwardedMapMethods.includes(prop))"
+                            " return Map.prototype[prop].bind(target);"
+                        "return target.get(prop);"
+                    "},"
+                    "set(target, prop, value) {"
+                        "if (!forwardedMapMethods.includes(prop))"
+                            " target.set(prop, value);"
+                        // A Proxy set trap must report success, or strict-mode
+                        // assignments throw.
+                        "return true;"
+                    "}"
+                "};"
+                "return new Proxy(new Map(), handler);"
+            "})();"
+            "let deAmpEnabled = false;\n"_s,
+        script,
+        "\n})();"_s);
+}
 
 // Injected into the adblock isolated world at document start. Observes the DOM for
 // class/id tokens (initial scan + MutationObserver), de-duplicates locally, batches
@@ -190,7 +232,7 @@ void AdBlockPageAgent::injectPendingScriptlet(WebCore::LocalFrame& frame, WebCor
 
     // Run at document start, before page scripts. Exceptions are swallowed: a broken
     // scriptlet must never abort the page load.
-    frame.script().executeScriptInWorldIgnoringException(world, script, JSC::SourceTaintedOrigin::Untainted);
+    frame.script().executeScriptInWorldIgnoringException(world, wrapScriptletWithGlobals(script), JSC::SourceTaintedOrigin::Untainted);
 }
 
 void AdBlockPageAgent::setDynamicHidingEnabled(WebCore::FrameIdentifier frameID, Vector<String>&& exceptions)
