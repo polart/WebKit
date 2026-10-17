@@ -1716,6 +1716,27 @@ struct WKWebsiteData {
 #endif
 }
 
+- (void)_setAdBlockCatalog:(NSString *)catalogJSON
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockCatalog(catalogJSON);
+#endif
+}
+
+- (void)_setAdBlockCatalogListEnabled:(BOOL)enabled forUUID:(NSString *)uuid
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->setAdBlockCatalogListEnabled(uuid, enabled);
+#endif
+}
+
+- (void)_refreshAdBlockCatalogLists
+{
+#if ENABLE(ADBLOCK)
+    protect(*_websiteDataStore)->refreshAdBlockCatalogLists();
+#endif
+}
+
 - (void)_addAdBlockAllowlistHost:(NSString *)host
 {
 #if ENABLE(ADBLOCK)

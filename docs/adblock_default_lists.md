@@ -117,6 +117,20 @@ component (`AdBlockComponentFiltersProvider`).
 3. On top of that, Chromium's own Component Updater background cadence (~hours)
    also refreshes these components.
 
+## How this fork implements it
+
+See U11 in
+[the adblock integration plan](plans/2026-07-11-001-feature-adblock-integration-plan.md)
+for the port. The short version: there is no Component Updater here, so the
+catalog and resource library are generated from an `adblock-resources` checkout
+by `Tools/Scripts/update-adblock-resources`, checked in under
+`Tools/NewBrowser/Resources/AdBlock/`, and bundled with the browser; each
+catalog entry's filter text is then fetched directly from its `sources[]` URLs
+over HTTPS and concatenated, in place of the per-list CRX component. The
+enablement rules above (`hidden`/`default_enabled` force-on, `list_touched`,
+locale preselection, `SupportsCurrentPlatform`) are reproduced in
+`AdBlockListStore::isCatalogListEnabled` and `applyCatalogDefaults`.
+
 ## Key source references
 
 | Concern                        | File                                                                          |

@@ -200,6 +200,7 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
 | U8 | Dynamic cosmetic hiding agent + IPC | `Source/WebKit/WebProcess/AdBlock/`, `NetworkConnectionToWebProcess.messages.in` | U7 |
 | U9 | Filter list management + persistence | `Source/WebKit/NetworkProcess/AdBlock/` | U3 |
 | U10 | Embedder API + MiniBrowser wiring | `Source/WebKit/UIProcess/API/`, `Tools/MiniBrowser/` | U9 |
+| U11 | Filter list catalog + resource library | `Source/WebKit/NetworkProcess/AdBlock/AdBlockCatalog.*`, `Tools/Scripts/update-adblock-resources`, `Tools/NewBrowser/` | U9, U10 |
 
 ### U1. Adblock FFI crate (cxx bridge)
 
@@ -356,6 +357,51 @@ Three stages, dependency-ordered: **Foundation** (U1 FFI crate → U2 build inte
   - Subscription CRUD via SPI round-trips (list state readable back and persists across data-store re-instantiation).
   - SPI calls before NetworkProcess launch are queued/applied once it starts (no crash, config not lost).
 - **Verification:** `run-api-tests --debug 'AdBlockAPI*'` green; manual MiniBrowser walkthrough of success criteria 1-4 documented in the PR description.
+
+---
+
+### U11. Filter list catalog + resource library (adblock-resources)
+
+- **Goal:** Ship real filter lists and the scriptlet resource library, sourced from [`brave/adblock-resources`](https://github.com/brave/adblock-resources), so the engine blocks out of the box instead of only against hand-fed rules.
+- **Requirements:** R6; success criteria 1-4 in their "with real lists" form.
+- **Dependencies:** U9, U10.
+- **Files:** `Source/WebKit/NetworkProcess/AdBlock/AdBlockCatalog.{h,cpp}` (new), `AdBlockListStore.{h,cpp}`, `NetworkProcess.messages.in` + `NetworkProcess.{h,cpp}`, `WebsiteDataStore.{h,cpp}`, `WKWebsiteDataStore{Private.h,.mm}`, `Tools/Scripts/update-adblock-resources` (new), `Tools/NewBrowser/Resources/AdBlock/{resources,list_catalog}.json` (generated, checked in), `Tools/NewBrowser/Source/ViewModel/AdBlockModel.swift` (new), `Tools/NewBrowser/Source/Views/SettingsView.swift`.
+
+#### What adblock-resources supplies
+
+Two independent artifacts, which Brave delivers as two Component Updater components (`mfddibmblmbccpadfndgakiopmmhebop`, `gkboaolpopklhgplhaaiboijnklogmbc` — see [Adblocker Defaults](../adblock_default_lists.md)) and this fork bundles instead:
+
+| Artifact | Upstream | Consumed by |
+|---|---|---|
+| `resources.json` | `metadata.json` + `resources/`, as its `readResources()` assembles them | `_setAdBlockResources:` → `new_resource_storage()` |
+| `list_catalog.json` | `filter_lists/list_catalog.json` | `_setAdBlockCatalog:` → `parseAdBlockCatalog` |
+
+#### Design
+
+- **No component updater, so fetch sources directly.** A catalog entry is one parse unit assembled from N source URLs (the `default` entry has 22). `AdBlockListStore::fetchCatalogSources` downloads them in catalog order through the existing HTTPS-only `AdBlockListDownloader` and concatenates them into one `lists/catalog-<uuid>.txt`. Any failed source abandons the whole assembly and keeps the previous text, so a partial list is never compiled.
+- **Catalog state is kept apart from subscriptions.** The catalog is reference data that changes upstream, so `m_catalog` is not persisted; only `CatalogListState` (enabled / userTouched / lastFetched, keyed by uuid) and the downloaded texts are. User-added URL subscriptions keep their existing, untouched code path.
+- **Permission masks finally flow.** Catalog lists compile with `AdBlockCatalogEntry::permissionMask` (21 of 62 entries declare `1`), so trusted uBO scriptlets in the default lists can actually inject. User-added subscriptions stay pinned at the most-restrictive 0.
+- **Enablement mirrors Brave's `IsFilterListEnabled`:** `hidden && default_enabled` is force-on with no user override; otherwise a remembered user choice wins over the catalog default; `platforms` excludes the iOS-only entry on macOS; `langs` preselects matching lists exactly once per profile (Brave's `kAdBlockCheckedAllDefaultRegions`).
+- **A re-sent catalog is a no-op.** The catalog is delivered on every launch, so the store fingerprints the document (SHA-256) and skips the rebuild when it matches, preserving the warm `.dat` startup (R7) that an unconditional recompile would throw away.
+- **Delivery lives in the app, not WebKit.** `AdBlockModel` bundles both files with NewBrowser and pushes them over the SPI, the same split Brave draws between its component layer and the shields engine. It also drives the 100-minute refresh cadence Brave uses, and backs a Content Blocking settings page.
+
+#### Known gaps
+
+- **uBO resources are not in `resources.json`.** Only the 17 Brave-authored scriptlets are. Brave merges uBlock Origin's scriptlets and redirect resources at packaging time from a uAssets checkout via adblock-rust's `resource-assembler` feature (already enabled in `Source/ThirdParty/AdblockRust`). Until that is wired up, rules naming a uBO scriptlet or redirect resolve to nothing.
+- **No per-source integrity.** Brave gets it from CRX signing; direct source fetches have only TLS. The `expectedHash` pin cannot help, since these lists change daily.
+- **`first_party_protections` is parsed but inert.** Brave routes those lists into a separate engine with first-party heuristics; this fork compiles exactly one engine (KTD4).
+- **Licensing.** adblock-resources is MPL-2.0, but an assembled `resources.json` would embed GPL-3.0 uBO scriptlets. Brave never bundles those — they arrive as component data. Prefer downloading the merged library at runtime over bundling it.
+
+#### Test scenarios
+
+- Catalog install enables exactly the `default_enabled` entries; the iOS-only entry is absent on macOS.
+- A hidden always-on list ignores `_setAdBlockCatalogListEnabled:forUUID:`; a visible one honours it and the choice survives a catalog re-send and a restart.
+- Locale preselection runs once: a matching regional list turns on, and stays off after the user turns it off and the catalog is re-sent.
+- A multi-source list assembles in catalog order; a mid-assembly source failure leaves the previously stored text compiled.
+- Re-sending an identical catalog neither re-downloads nor rebuilds (engine query count and `lastFetched` unchanged).
+- A catalog list's declared permission mask lets a trusted scriptlet inject where a mask-0 user subscription carrying the same rule does not.
+
+- **Verification:** `mise run styles`; debug build flag-on and flag-off; `run-api-tests --debug 'AdBlock*'`; manual NewBrowser walkthrough of Settings → Content Blocking.
 
 ---
 

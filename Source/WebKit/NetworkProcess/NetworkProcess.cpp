@@ -1529,6 +1529,30 @@ void NetworkProcess::setAdBlockResources(PAL::SessionID sessionID, String&& reso
     }
 }
 
+void NetworkProcess::setAdBlockCatalog(PAL::SessionID sessionID, String&& catalogJSON)
+{
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setCatalog(catalogJSON);
+    }
+}
+
+void NetworkProcess::setAdBlockCatalogListEnabled(PAL::SessionID sessionID, String&& uuid, bool enabled)
+{
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->setCatalogListEnabled(uuid, enabled);
+    }
+}
+
+void NetworkProcess::refreshAdBlockCatalogLists(PAL::SessionID sessionID)
+{
+    if (CheckedPtr session = networkSession(sessionID)) {
+        if (RefPtr store = session->ensureAdBlockListStore())
+            store->refreshCatalogLists();
+    }
+}
+
 void NetworkProcess::addAdBlockAllowlistHost(PAL::SessionID sessionID, String&& host)
 {
     if (CheckedPtr session = networkSession(sessionID)) {

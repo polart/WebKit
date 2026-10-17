@@ -16,6 +16,7 @@
 #include <pal/crypto/CryptoDigest.h>
 #include <wtf/FileSystem.h>
 #include <wtf/JSONValues.h>
+#include <wtf/Language.h>
 #include <wtf/RunLoop.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/WallTime.h>
@@ -23,11 +24,16 @@
 
 namespace WebKit {
 
-static constexpr unsigned configFormatVersion = 1;
+// Version 2 added the catalog keys (`catalogLists`,
+// `didPreselectRegionalLists`). A version 1 config simply lacks them and reads
+// back as a profile that has not seen a catalog yet, so no migration is needed.
+static constexpr unsigned configFormatVersion = 2;
 
-// Lists are compiled with the most-restrictive scriptlet permission mask (0);
-// nothing in this store designates a subscription as trusted, so no list may
-// inject privileged scriptlets (U7 security posture).
+// User-added subscriptions are compiled with the most-restrictive scriptlet
+// permission mask (0): an arbitrary URL the user pasted is not trusted to inject
+// privileged scriptlets (U7 security posture). Catalog lists are different —
+// they carry a mask vouched for by the catalog publisher — so they use
+// AdBlockCatalogEntry::permissionMask instead.
 static constexpr uint8_t restrictivePermissionMask = 0;
 
 static String sha256Hex(std::span<const uint8_t> bytes)
@@ -116,7 +122,10 @@ void AdBlockListStore::loadConfig()
     m_subscriptions.clear();
     m_customRules = String { };
     m_allowlist.clear();
+    m_catalogState.clear();
+    m_catalogFingerprint = String { };
     m_enabled = false;
+    m_didPreselectRegionalLists = false;
 
     auto contents = FileSystem::readEntireFile(configPath());
     if (!contents)
@@ -164,6 +173,25 @@ void AdBlockListStore::loadConfig()
             m_subscriptions.append(WTF::move(sub));
         }
     }
+
+    m_didPreselectRegionalLists = root->getBoolean("didPreselectRegionalLists"_s).value_or(false);
+    m_catalogFingerprint = root->getString("catalogFingerprint"_s);
+
+    if (RefPtr catalogLists = root->getArray("catalogLists"_s)) {
+        for (auto& entry : *catalogLists) {
+            RefPtr object = entry->asObject();
+            if (!object)
+                continue;
+            auto uuid = object->getString("uuid"_s);
+            if (uuid.isEmpty())
+                continue;
+            CatalogListState state;
+            state.enabled = object->getBoolean("enabled"_s).value_or(false);
+            state.userTouched = object->getBoolean("userTouched"_s).value_or(false);
+            state.lastFetched = object->getDouble("lastFetched"_s).value_or(0);
+            m_catalogState.set(WTF::move(uuid), state);
+        }
+    }
 }
 
 void AdBlockListStore::persistConfig() const
@@ -190,6 +218,20 @@ void AdBlockListStore::persistConfig() const
         subs->pushObject(WTF::move(object));
     }
     root->setArray("subscriptions"_s, WTF::move(subs));
+
+    root->setBoolean("didPreselectRegionalLists"_s, m_didPreselectRegionalLists);
+    root->setString("catalogFingerprint"_s, m_catalogFingerprint);
+
+    auto catalogLists = JSON::Array::create();
+    for (auto& [uuid, state] : m_catalogState) {
+        auto object = JSON::Object::create();
+        object->setString("uuid"_s, uuid);
+        object->setBoolean("enabled"_s, state.enabled);
+        object->setBoolean("userTouched"_s, state.userTouched);
+        object->setDouble("lastFetched"_s, state.lastFetched);
+        catalogLists->pushObject(WTF::move(object));
+    }
+    root->setArray("catalogLists"_s, WTF::move(catalogLists));
 
     FileSystem::makeAllDirectories(m_directory);
     auto json = root->toJSONString().utf8();
@@ -433,6 +475,266 @@ void AdBlockListStore::setResources(String resourcesJSON)
     scheduleRebuild();
 }
 
+// --- Filter list catalog (U11) ---
+
+// Catalog list texts live beside the user-added subscription texts under
+// lists/. The prefix keeps the two namespaces apart: user lists are named from
+// the SHA-256 of their URL, catalog lists from their uuid (validated to be a
+// safe path component by the catalog parser).
+String AdBlockListStore::catalogListFilename(const String& uuid) const
+{
+    return makeString("catalog-"_s, uuid, ".txt"_s);
+}
+
+const AdBlockCatalogEntry* AdBlockListStore::findCatalogEntry(const String& uuid) const
+{
+    for (auto& entry : m_catalog) {
+        if (entry.uuid == uuid)
+            return &entry;
+    }
+    return nullptr;
+}
+
+bool AdBlockListStore::isCatalogListEnabled(const AdBlockCatalogEntry& entry) const
+{
+    if (!entry.supportsCurrentPlatform())
+        return false;
+
+    // A hidden default list is never surfaced in settings, so there is no user
+    // choice to honour and it is force-on — matching Brave's IsFilterListEnabled,
+    // where `hidden && default_enabled` short-circuits before the stored pref.
+    if (entry.hidden && entry.defaultEnabled)
+        return true;
+
+    auto iterator = m_catalogState.find(entry.uuid);
+    if (iterator == m_catalogState.end())
+        return entry.defaultEnabled;
+    return iterator->value.enabled;
+}
+
+bool AdBlockListStore::applyCatalogDefaults()
+{
+    if (m_catalog.isEmpty())
+        return false;
+
+    // Locale preselection runs exactly once per profile: after that, an
+    // unticked regional list stays unticked even though it still matches the
+    // locale. This is Brave's kAdBlockCheckedAllDefaultRegions gate.
+    bool shouldPreselectRegional = !m_didPreselectRegionalLists;
+    auto locale = defaultLanguage();
+
+    bool changed = false;
+    for (auto& entry : m_catalog) {
+        auto result = m_catalogState.ensure(entry.uuid, [] {
+            return CatalogListState { };
+        });
+        auto& state = result.iterator->value;
+
+        if (result.isNewEntry) {
+            state.enabled = entry.defaultEnabled;
+            changed = true;
+        }
+
+        if (shouldPreselectRegional && !state.userTouched && !state.enabled && entry.supportsCurrentPlatform() && entry.matchesLocale(locale)) {
+            state.enabled = true;
+            changed = true;
+            RELEASE_LOG(AdBlock, "AdBlockListStore: preselecting regional list \"%{public}s\" for locale %{public}s", entry.title.utf8().data(), locale.utf8().data());
+        }
+    }
+
+    if (shouldPreselectRegional) {
+        m_didPreselectRegionalLists = true;
+        changed = true;
+    }
+
+    return changed;
+}
+
+void AdBlockListStore::setCatalog(const String& catalogJSON)
+{
+    auto catalog = parseAdBlockCatalog(catalogJSON);
+    if (catalog.isEmpty()) {
+        // A catalog that parses to nothing is a delivery fault, not an
+        // instruction to forget every list. Keep whatever is already compiled.
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: ignoring an empty or unparseable catalog");
+        return;
+    }
+
+    // The embedder re-sends the same bundled catalog on every launch (it is not
+    // persisted), so recognise that case and leave the engine alone. Rebuilding
+    // unconditionally here would re-parse every list text on each launch and
+    // throw away exactly the startup the warm `.dat` cache exists to buy (R7).
+    // The fingerprint covers the whole document, so an upstream change to a
+    // list's sources or permission mask still forces the rebuild.
+    auto fingerprint = sha256Hex(utf8Bytes(catalogJSON).span());
+    bool isSameCatalog = fingerprint == m_catalogFingerprint;
+
+    m_catalog = WTF::move(catalog);
+    bool changed = applyCatalogDefaults() || !isSameCatalog;
+
+    if (!isSameCatalog) {
+        // A list the catalog dropped can never be compiled or shown again, so
+        // its text is dead weight; delete it. The small per-list state is kept,
+        // so a user's choice survives a list that disappears and later returns.
+        for (auto& uuid : m_catalogState.keys()) {
+            if (!findCatalogEntry(uuid))
+                FileSystem::deleteFile(listTextPath(catalogListFilename(uuid)));
+        }
+        m_catalogFingerprint = WTF::move(fingerprint);
+    }
+
+    if (changed)
+        persistConfig();
+
+    size_t enabledCount = 0;
+    for (auto& entry : m_catalog) {
+        if (!isCatalogListEnabled(entry))
+            continue;
+        ++enabledCount;
+        // Lists that are already downloaded are left alone; refreshCatalogLists()
+        // is what re-fetches them. installCatalogListText schedules its own
+        // rebuild when a download lands.
+        if (!FileSystem::fileExists(listTextPath(catalogListFilename(entry.uuid))))
+            startCatalogListDownload(entry);
+    }
+
+    RELEASE_LOG(AdBlock, "AdBlockListStore: catalog installed with %zu list(s), %zu enabled%{public}s", m_catalog.size(), enabledCount, changed ? "" : " (unchanged)");
+
+    if (changed)
+        scheduleRebuild();
+}
+
+void AdBlockListStore::setCatalogListEnabled(const String& uuid, bool enabled)
+{
+    const auto* entry = findCatalogEntry(uuid);
+    if (!entry) {
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: ignoring a toggle for a list that is not in the catalog");
+        return;
+    }
+
+    // Force-on lists have no toggle to override (see isCatalogListEnabled).
+    if (entry->hidden && entry->defaultEnabled) {
+        RELEASE_LOG(AdBlock, "AdBlockListStore: ignoring a toggle for a hidden always-on list");
+        return;
+    }
+
+    auto& state = m_catalogState.ensure(uuid, [] {
+        return CatalogListState { };
+    }).iterator->value;
+    if (state.enabled == enabled && state.userTouched)
+        return;
+
+    state.enabled = enabled;
+    state.userTouched = true;
+    persistConfig();
+
+    if (enabled && !FileSystem::fileExists(listTextPath(catalogListFilename(uuid))))
+        startCatalogListDownload(*entry);
+
+    scheduleRebuild();
+}
+
+void AdBlockListStore::startCatalogListDownload(const AdBlockCatalogEntry& entry)
+{
+    RELEASE_LOG(AdBlock, "AdBlockListStore: fetching catalog list \"%{public}s\" from %zu source(s)", entry.title.utf8().data(), entry.sources.size());
+    fetchCatalogSources(entry.uuid, Vector<URL> { entry.sources }, 0, Vector<uint8_t> { });
+}
+
+void AdBlockListStore::fetchCatalogSources(String uuid, Vector<URL>&& sources, size_t index, Vector<uint8_t>&& accumulated)
+{
+    if (index >= sources.size()) {
+        if (accumulated.isEmpty()) {
+            RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: catalog list assembled to nothing; keeping any previous text");
+            return;
+        }
+        installCatalogListText(uuid, accumulated.span());
+        return;
+    }
+
+    // Copy before `sources` is moved into the completion handler.
+    URL url { sources[index] };
+    if (!url.protocolIs("https"_s)) {
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: refusing a non-HTTPS catalog list source; abandoning the list");
+        return;
+    }
+
+    Ref networkProcess { m_networkProcess.get() };
+    AdBlockListDownloader::create(networkProcess, m_sessionID, url, [protectedThis = Ref { *this }, uuid = WTF::move(uuid), sources = WTF::move(sources), index, accumulated = WTF::move(accumulated)](std::optional<Vector<uint8_t>>&& result) mutable {
+        if (!result || result->isEmpty() || !looksLikeFilterList(result->span())) {
+            // Compiling a list that is missing one of its sources would silently
+            // under-block, so abandon the whole assembly and keep the text from
+            // the last complete fetch.
+            RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: a catalog list source failed or was not a filter list; keeping the list's previous text");
+            return;
+        }
+
+        // Separate the sources so the last line of one cannot run into the
+        // first line of the next.
+        if (!accumulated.isEmpty())
+            accumulated.append(static_cast<uint8_t>('\n'));
+        accumulated.append(result->span());
+
+        protectedThis->fetchCatalogSources(WTF::move(uuid), WTF::move(sources), index + 1, WTF::move(accumulated));
+    });
+}
+
+void AdBlockListStore::installCatalogListText(const String& uuid, std::span<const uint8_t> bytes)
+{
+    FileSystem::makeAllDirectories(listsDirectory());
+    if (!FileSystem::overwriteEntireFile(listTextPath(catalogListFilename(uuid)), bytes)) {
+        RELEASE_LOG_ERROR(AdBlock, "AdBlockListStore: failed to write catalog list text");
+        return;
+    }
+
+    auto& state = m_catalogState.ensure(uuid, [] {
+        return CatalogListState { };
+    }).iterator->value;
+    state.lastFetched = WallTime::now().secondsSinceEpoch().value();
+
+    RELEASE_LOG(AdBlock, "AdBlockListStore: stored %zu bytes of catalog list text", bytes.size());
+    persistConfig();
+    scheduleRebuild();
+}
+
+Vector<AdBlockListStore::CatalogListInfo> AdBlockListStore::catalogLists() const
+{
+    Vector<CatalogListInfo> result;
+    result.reserveInitialCapacity(m_catalog.size());
+    for (auto& entry : m_catalog) {
+        // A list that cannot run on this platform is not an option the embedder
+        // should offer, so it is left out entirely rather than shown disabled.
+        if (!entry.supportsCurrentPlatform())
+            continue;
+
+        CatalogListInfo info;
+        info.uuid = entry.uuid;
+        info.title = entry.title;
+        info.description = entry.description;
+        info.supportURL = entry.supportURL;
+        info.languages = entry.languages;
+        info.hidden = entry.hidden;
+        info.defaultEnabled = entry.defaultEnabled;
+        info.enabled = isCatalogListEnabled(entry);
+
+        auto iterator = m_catalogState.find(entry.uuid);
+        if (iterator != m_catalogState.end())
+            info.lastFetched = iterator->value.lastFetched;
+
+        result.append(WTF::move(info));
+    }
+    return result;
+}
+
+void AdBlockListStore::refreshCatalogLists()
+{
+    // startCatalogListDownload copies what each fetch needs, so the in-flight
+    // downloads do not alias m_catalog.
+    for (auto& entry : m_catalog) {
+        if (isCatalogListEnabled(entry))
+            startCatalogListDownload(entry);
+    }
+}
+
 void AdBlockListStore::setEnabled(bool enabled)
 {
     // Always re-assert the manager's query gate. The AdBlockManager is
@@ -473,6 +775,27 @@ String AdBlockListStore::stateJSON() const
     }
     root->setArray("subscriptions"_s, WTF::move(subs));
 
+    auto catalogListsArray = JSON::Array::create();
+    for (auto& list : catalogLists()) {
+        auto object = JSON::Object::create();
+        object->setString("uuid"_s, list.uuid);
+        object->setString("title"_s, list.title);
+        object->setString("desc"_s, list.description);
+        object->setString("supportURL"_s, list.supportURL);
+        object->setBoolean("enabled"_s, list.enabled);
+        object->setBoolean("defaultEnabled"_s, list.defaultEnabled);
+        object->setBoolean("hidden"_s, list.hidden);
+        object->setDouble("lastFetched"_s, list.lastFetched);
+
+        auto languages = JSON::Array::create();
+        for (auto& language : list.languages)
+            languages->pushString(language);
+        object->setArray("langs"_s, WTF::move(languages));
+
+        catalogListsArray->pushObject(WTF::move(object));
+    }
+    root->setArray("catalogLists"_s, WTF::move(catalogListsArray));
+
     return root->toJSONString();
 }
 
@@ -500,13 +823,29 @@ void AdBlockListStore::rebuildEngine()
         files.append({ listTextPath(sub.filename), restrictivePermissionMask });
     }
 
+    // Catalog lists carry the permission mask the catalog declares for them, so
+    // a trusted list's `+js(...)` rules can resolve the privileged scriptlets
+    // their mask authorizes. A list that is enabled but has not finished
+    // downloading yet simply has no file and is skipped; installCatalogListText
+    // schedules another rebuild when it lands.
+    size_t catalogListCount = 0;
+    for (auto& entry : m_catalog) {
+        if (!isCatalogListEnabled(entry))
+            continue;
+        auto path = listTextPath(catalogListFilename(entry.uuid));
+        if (!FileSystem::fileExists(path))
+            continue;
+        files.append({ WTF::move(path), entry.permissionMask });
+        ++catalogListCount;
+    }
+
     // Custom rules are already in memory (a small user-authored blob), so pass
     // them inline rather than through a file read.
     Vector<AdBlockEngine::ListInput> inlineLists;
     if (!m_customRules.isEmpty())
         inlineLists.append({ utf8Bytes(m_customRules), restrictivePermissionMask });
 
-    RELEASE_LOG(AdBlock, "AdBlockListStore: rebuilding engine from %zu enabled list(s)%s", files.size(), m_customRules.isEmpty() ? "" : " + custom rules");
+    RELEASE_LOG(AdBlock, "AdBlockListStore: rebuilding engine from %zu enabled list(s) (%zu from the catalog)%s", files.size(), catalogListCount, m_customRules.isEmpty() ? "" : " + custom rules");
 
     Ref manager { Ref { m_networkProcess.get() }->adBlockManager() };
     // Compile-and-swap on the WorkQueue, then re-serialize the `.dat` so the warm

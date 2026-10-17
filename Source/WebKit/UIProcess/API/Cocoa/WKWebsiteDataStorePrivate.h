@@ -194,6 +194,18 @@ typedef NS_OPTIONS(NSUInteger, _WKWebsiteDataStoreFetchOptions) {
 - (void)_refreshAdBlockSubscriptions;
 - (void)_setAdBlockCustomRules:(NSString *)rules;
 - (void)_setAdBlockResources:(NSString *)resourcesJSON;
+// The filter list catalog (brave/adblock-resources filter_lists/list_catalog.json).
+// Installing it enables the catalog's default lists, preselects lists matching
+// the system locale once per profile, and downloads each enabled list by
+// concatenating its declared sources. The catalog itself is not persisted —
+// supply it on every launch — but each list's enabled state and downloaded text
+// are. -_getAdBlockStateWithCompletionHandler: reports the resulting lists under
+// the `catalogLists` key ({ uuid, title, desc, supportURL, langs, enabled,
+// defaultEnabled, hidden, lastFetched }); `hidden` lists are always-on and
+// ignore -_setAdBlockCatalogListEnabled:forUUID:.
+- (void)_setAdBlockCatalog:(NSString *)catalogJSON;
+- (void)_setAdBlockCatalogListEnabled:(BOOL)enabled forUUID:(NSString *)uuid;
+- (void)_refreshAdBlockCatalogLists;
 - (void)_addAdBlockAllowlistHost:(NSString *)host;
 - (void)_removeAdBlockAllowlistHost:(NSString *)host;
 - (void)_getAdBlockStateWithCompletionHandler:(void(^)(NSDictionary *))completionHandler;
