@@ -524,6 +524,87 @@ private struct DebugOverlaysView: View {
     }
 }
 
+// Ad blocking: the master toggle plus the catalog of filter lists WebKit
+// offers. The always-on lists (Brave's hidden `default_enabled` entries) have
+// no toggle, so they are summarized rather than listed.
+private struct ContentBlockingView: View {
+    @State
+    private var model = AdBlockModel.shared
+
+    private static let lastFetchedFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+
+    private func subtitle(for list: AdBlockModel.CatalogList) -> String? {
+        guard list.isEnabled else {
+            return list.details.isEmpty ? nil : list.details
+        }
+        guard let lastFetched = list.lastFetched else {
+            return "Downloading…"
+        }
+        let fetched = "Updated \(Self.lastFetchedFormatter.localizedString(for: lastFetched, relativeTo: .now))"
+        return list.details.isEmpty ? fetched : "\(list.details) · \(fetched)"
+    }
+
+    var body: some View {
+        @Bindable
+        var model = model
+
+        SettingsPage {
+            SettingsGroup(title: "Ad Blocking", systemImage: "shield.lefthalf.filled") {
+                SettingsRow(
+                    title: "Block Ads and Trackers",
+                    subtitle: model.hiddenListCount > 0
+                        ? "\(model.hiddenListCount) built-in list\(model.hiddenListCount == 1 ? "" : "s") are always on"
+                        : nil
+                ) {
+                    SettingsToggle(isOn: $model.isEnabled, label: "Block Ads and Trackers")
+                }
+
+                SettingsRow(title: "Filter Lists", subtitle: "Re-download every enabled list now") {
+                    SettingsPillButton(title: "Update Now", isEnabled: model.isLoaded) {
+                        model.refreshLists()
+                    }
+                }
+            }
+
+            if model.lists.isEmpty {
+                SettingsGroup(title: "Filter Lists", systemImage: "list.bullet.rectangle") {
+                    SettingsRow(
+                        title: model.isLoaded ? "No filter lists available" : "Loading filter lists…",
+                        subtitle: model.isLoaded ? "The bundled catalog could not be read." : nil
+                    ) {
+                        EmptyView()
+                    }
+                }
+            } else {
+                SettingsGroup(title: "Filter Lists", systemImage: "list.bullet.rectangle") {
+                    ForEach(model.lists) { list in
+                        SettingsRow(
+                            title: list.title,
+                            subtitle: subtitle(for: list),
+                            isEmphasized: list.isEnabled != list.isDefaultEnabled
+                        ) {
+                            SettingsToggle(
+                                isOn: Binding(
+                                    get: { list.isEnabled },
+                                    set: { model.setList(list, enabled: $0) }
+                                ),
+                                label: list.title
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .task {
+            await model.reloadState()
+        }
+    }
+}
+
 // MARK: - Sidebar
 
 private struct SidebarIcon: View {
@@ -739,6 +820,7 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case general
+    case contentBlocking
     case featureFlags
     case debugOverlays
 
@@ -747,6 +829,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
+        case .contentBlocking: "Content Blocking"
         case .featureFlags: "Feature Flags"
         case .debugOverlays: "Debug Overlays"
         }
@@ -755,6 +838,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .general: "gearshape.fill"
+        case .contentBlocking: "shield.lefthalf.filled"
         case .featureFlags: "flag.fill"
         case .debugOverlays: "square.dashed"
         }
@@ -763,6 +847,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var iconColor: Color {
         switch self {
         case .general: Color(white: 0.38)
+        case .contentBlocking: Color(red: 0.98, green: 0.45, blue: 0.09)
         case .featureFlags: Color(red: 0.04, green: 0.52, blue: 1.0)
         case .debugOverlays: Color(red: 0.61, green: 0.36, blue: 0.85)
         }
@@ -795,6 +880,8 @@ struct SettingsView: View {
                 switch selection {
                 case .general:
                     GeneralSettingsView(currentURL: currentURL)
+                case .contentBlocking:
+                    ContentBlockingView()
                 case .featureFlags:
                     FeatureFlagsView()
                         .environment(self.featureFlagsModel)

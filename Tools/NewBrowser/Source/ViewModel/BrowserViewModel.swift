@@ -107,6 +107,11 @@ final class BrowserViewModel {
 
         self.navigationDecider.owner = self
         self.dialogPresenter.owner = self
+
+        // Ships the bundled filter list catalog and scriptlet library to the
+        // NetworkProcess. Every window shares the default data store, so only
+        // the first call does any work.
+        AdBlockModel.shared.activate()
     }
 
     let page: WebPage

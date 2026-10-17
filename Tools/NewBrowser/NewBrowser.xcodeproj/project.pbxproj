@@ -34,6 +34,8 @@
 		B975015F2FE9F5BA0067C5C8 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				AdBlock/list_catalog.json,
+				AdBlock/resources.json,
 				Assets.xcassets,
 			);
 			target = 07A58BD32D0400B300CAB4ED /* NewBrowser */;

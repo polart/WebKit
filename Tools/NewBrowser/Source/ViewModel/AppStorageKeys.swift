@@ -31,6 +31,12 @@ enum AppStorageKeys {
     static let backgroundHidden = "backgroundHidden"
     static let showColorInTabBar = "showColorInTabBar"
 
+    /// Whether the ad blocking toggle has been settled, by the user or by first launch.
+    ///
+    /// A later launch then leaves a blocker the user turned off alone. The value itself
+    /// lives in WebKit's own adblock config; this only records that a choice exists.
+    static let adBlockConfigured = "adBlockConfigured"
+
     static let debugOverlayNonFastScrollableRegion = "debugOverlayNonFastScrollableRegion"
     static let debugOverlayWheelEventHandlerRegion = "debugOverlayWheelEventHandlerRegion"
     static let debugOverlayTouchActionRegion = "debugOverlayTouchActionRegion"

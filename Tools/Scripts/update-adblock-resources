@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 the WebKit adblock integration authors.
+# SPDX-License-Identifier: MPL-2.0
+#
+# Regenerates the two adblock data files the browser ships, from a checkout of
+# brave/adblock-resources:
+#
+#   resources.json    the scriptlet/redirect resource library, consumed by
+#                     -[WKWebsiteDataStore _setAdBlockResources:] and handed to
+#                     adblock-rust's new_resource_storage().
+#   list_catalog.json the filter list catalog, consumed by
+#                     -[WKWebsiteDataStore _setAdBlockCatalog:] and parsed by
+#                     AdBlockCatalog.
+#
+# This is the offline half of what Brave's brave-core-crx-packager does before
+# publishing the "Brave Ad Block Resources Library" and "Brave Ad Block List
+# Catalog" components. We have no component updater, so the files are checked in
+# and bundled with the browser instead, and re-run of this script is how they
+# are updated.
+#
+# resources.json is built the way adblock-resources' own index.js does it
+# (metadata.json entries, with resourcePath replaced by the base64 of the file's
+# bytes) rather than copied from its dist/, so a dist/ that is stale relative to
+# resources/ cannot be shipped by accident — the same drift its verify.js
+# guards against.
+#
+# NOT YET INCLUDED: uBlock Origin's own scriptlets and redirect resources. Brave
+# merges those into the same resources.json at packaging time, assembling them
+# from a uAssets checkout via adblock-rust's `resource-assembler` feature (which
+# Source/ThirdParty/AdblockRust already enables). Until that is wired up, rules
+# calling a uBO-provided scriptlet or redirect resolve to nothing; only the
+# Brave-authored resources below are available.
+
+import argparse
+import base64
+import json
+import os
+import sys
+
+DEFAULT_SOURCE = os.path.join("..", "adblock-resources")
+DEFAULT_OUTPUT = os.path.join("Tools", "NewBrowser", "Resources", "AdBlock")
+
+
+def repository_root():
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def build_resources(source):
+    """Mirror adblock-resources' readResources(): metadata.json, with each
+    entry's resourcePath replaced by the base64 of that file's contents."""
+    metadata_path = os.path.join(source, "metadata.json")
+    with open(metadata_path, encoding="utf-8") as handle:
+        metadata = json.load(handle)
+
+    resources_dir = os.path.join(source, "resources")
+    referenced = set()
+    resources = []
+
+    for entry in metadata:
+        resource_path = entry["resourcePath"]
+        file_path = os.path.join(resources_dir, resource_path)
+        if not os.path.isfile(file_path):
+            sys.exit("metadata.json references '%s' but it is missing from resources/" % resource_path)
+        referenced.add(resource_path)
+
+        with open(file_path, "rb") as handle:
+            content = base64.b64encode(handle.read()).decode("ascii")
+
+        resources.append({
+            "name": entry["name"],
+            "aliases": entry.get("aliases", []),
+            "kind": entry["kind"],
+            "content": content,
+        })
+
+    # The reverse direction of the same check: a resource nobody declared would
+    # be silently dropped from the library.
+    for name in sorted(os.listdir(resources_dir)):
+        if name not in referenced:
+            sys.exit("resources/%s has no entry in metadata.json" % name)
+
+    return resources
+
+
+def load_catalog(source):
+    catalog_path = os.path.join(source, "filter_lists", "list_catalog.json")
+    with open(catalog_path, encoding="utf-8") as handle:
+        catalog = json.load(handle)
+
+    if not isinstance(catalog, list) or not catalog:
+        sys.exit("list_catalog.json is not a non-empty array")
+
+    # AdBlockCatalog drops entries it cannot use; fail loudly here instead, so a
+    # malformed catalog is caught at update time rather than at runtime.
+    for entry in catalog:
+        for field in ("uuid", "title", "sources"):
+            if field not in entry:
+                sys.exit("catalog entry %r is missing '%s'" % (entry.get("title", "?"), field))
+        for source_entry in entry["sources"]:
+            url = source_entry.get("url", "")
+            if not url.startswith("https://"):
+                sys.exit("catalog entry %r has a non-HTTPS source: %s" % (entry["title"], url))
+
+    return catalog
+
+
+def write_json(path, value):
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(value, handle, separators=(",", ":"))
+        handle.write("\n")
+    return os.path.getsize(path)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Regenerate resources.json and list_catalog.json from a brave/adblock-resources checkout.")
+    parser.add_argument("--source", default=DEFAULT_SOURCE,
+                        help="path to a brave/adblock-resources checkout (default: %(default)s)")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT,
+                        help="directory to write into, relative to the repository root (default: %(default)s)")
+    arguments = parser.parse_args()
+
+    root = repository_root()
+    source = arguments.source if os.path.isabs(arguments.source) else os.path.join(root, arguments.source)
+    output = arguments.output if os.path.isabs(arguments.output) else os.path.join(root, arguments.output)
+
+    if not os.path.isdir(source):
+        sys.exit("no adblock-resources checkout at %s (pass --source)" % source)
+
+    resources = build_resources(source)
+    catalog = load_catalog(source)
+
+    os.makedirs(output, exist_ok=True)
+    resources_size = write_json(os.path.join(output, "resources.json"), resources)
+    catalog_size = write_json(os.path.join(output, "list_catalog.json"), catalog)
+
+    enabled = sum(1 for entry in catalog if entry.get("default_enabled"))
+    sources = sum(len(entry["sources"]) for entry in catalog)
+
+    print("wrote %s" % os.path.relpath(output, root))
+    print("  resources.json     %d resources, %d bytes" % (len(resources), resources_size))
+    print("  list_catalog.json  %d lists (%d enabled by default, %d sources), %d bytes"
+          % (len(catalog), enabled, sources, catalog_size))
+
+
+if __name__ == "__main__":
+    main()
