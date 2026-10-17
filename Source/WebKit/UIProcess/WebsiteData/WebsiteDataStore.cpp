@@ -2075,6 +2075,21 @@ void WebsiteDataStore::setAdBlockResources(const String& resourcesJSON)
     protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockResources(m_sessionID, resourcesJSON), 0);
 }
 
+void WebsiteDataStore::setAdBlockCatalog(const String& catalogJSON)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockCatalog(m_sessionID, catalogJSON), 0);
+}
+
+void WebsiteDataStore::setAdBlockCatalogListEnabled(const String& uuid, bool enabled)
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::SetAdBlockCatalogListEnabled(m_sessionID, uuid, enabled), 0);
+}
+
+void WebsiteDataStore::refreshAdBlockCatalogLists()
+{
+    protect(networkProcess())->send(Messages::NetworkProcess::RefreshAdBlockCatalogLists(m_sessionID), 0);
+}
+
 void WebsiteDataStore::addAdBlockAllowlistHost(const String& host)
 {
     protect(networkProcess())->send(Messages::NetworkProcess::AddAdBlockAllowlistHost(m_sessionID, host), 0);

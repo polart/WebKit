@@ -205,6 +205,9 @@ public:
     void refreshAdBlockSubscriptions();
     void setAdBlockCustomRules(const String&);
     void setAdBlockResources(const String&);
+    void setAdBlockCatalog(const String& catalogJSON);
+    void setAdBlockCatalogListEnabled(const String& uuid, bool);
+    void refreshAdBlockCatalogLists();
     void addAdBlockAllowlistHost(const String&);
     void removeAdBlockAllowlistHost(const String&);
     void adBlockState(CompletionHandler<void(String)>&&);
