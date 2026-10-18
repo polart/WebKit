@@ -139,8 +139,10 @@ void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrig
     auto hostname = url.host().toString();
     auto requestType = requestTypeForDestination(destination);
     // For a main-frame document the tab origin is the document itself: source
-    // host is self and the load is first-party.
-    String sourceHostname = topOrigin ? topOrigin->host() : (isMainFrameLoad ? hostname : String { });
+    // host is self and the load is first-party. This is also the host the
+    // per-site allowlist keys on, so it must never be the outgoing document's
+    // origin during a cross-site main-frame navigation.
+    String sourceHostname = isMainFrameLoad ? hostname : (topOrigin ? topOrigin->host() : String { });
     bool isThirdParty = topOrigin && !RegistrableDomain(url).matches(topOrigin->data());
     // CSP ($csp rules) and cosmetic resources (element hiding, scriptlets) both
     // only apply to a document/subdocument navigation.

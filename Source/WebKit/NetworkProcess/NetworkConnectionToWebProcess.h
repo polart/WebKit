@@ -360,7 +360,7 @@ private:
 #endif
 
 #if ENABLE(ADBLOCK)
-    void hiddenClassIdSelectors(WebPageProxyIdentifier, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>&&, std::optional<Seconds>)>&&);
+    void hiddenClassIdSelectors(WebPageProxyIdentifier, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& siteHostname, CompletionHandler<void(Vector<String>&&, std::optional<Seconds>)>&&);
 #endif
 
     void removeLoadIdentifier(WebCore::ResourceLoaderIdentifier);
