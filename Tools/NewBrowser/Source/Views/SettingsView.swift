@@ -570,6 +570,27 @@ private struct ContentBlockingView: View {
                 }
             }
 
+            SettingsGroup(title: "Sites With Ad Blocking Off", systemImage: "shield.slash") {
+                if model.allowlistedSites.isEmpty {
+                    SettingsRow(
+                        title: "No exceptions",
+                        subtitle: "Turn off ad blocking for a site from the shield in the toolbar."
+                    ) {
+                        EmptyView()
+                    }
+                } else {
+                    ForEach(model.allowlistedSites, id: \.self) { site in
+                        SettingsRow(title: site) {
+                            SettingsPillButton(title: "Remove") {
+                                Task {
+                                    await model.setBlocking(true, onSite: site)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if model.lists.isEmpty {
                 SettingsGroup(title: "Filter Lists", systemImage: "list.bullet.rectangle") {
                     SettingsRow(

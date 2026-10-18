@@ -2221,7 +2221,7 @@ void NetworkConnectionToWebProcess::removeSyntheticParkedLoaderForTesting(Networ
 #endif
 
 #if ENABLE(ADBLOCK)
-void NetworkConnectionToWebProcess::hiddenClassIdSelectors(WebPageProxyIdentifier pageID, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>&&, std::optional<Seconds>)>&& completionHandler)
+void NetworkConnectionToWebProcess::hiddenClassIdSelectors(WebPageProxyIdentifier pageID, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& siteHostname, CompletionHandler<void(Vector<String>&&, std::optional<Seconds>)>&& completionHandler)
 {
     // Rate-limit the query before it reaches the shared engine. The policy lives in
     // the AdBlock component: it caps the per-message exceptions vector (the engine
@@ -2237,7 +2237,7 @@ void NetworkConnectionToWebProcess::hiddenClassIdSelectors(WebPageProxyIdentifie
         return completionHandler({ }, decision.retryAfter);
     }
 
-    m_networkProcess->adBlockManager().hiddenClassIdSelectors(WTF::move(classes), WTF::move(ids), WTF::move(exceptions), hostname, [completionHandler = WTF::move(completionHandler)](Vector<String> selectors) mutable {
+    m_networkProcess->adBlockManager().hiddenClassIdSelectors(WTF::move(classes), WTF::move(ids), WTF::move(exceptions), siteHostname, [completionHandler = WTF::move(completionHandler)](Vector<String> selectors) mutable {
         completionHandler(WTF::move(selectors), std::nullopt);
     });
 }

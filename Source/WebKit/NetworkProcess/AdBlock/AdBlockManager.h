@@ -70,14 +70,20 @@ public:
     bool isEnabled() const { return m_enabled.load(std::memory_order_relaxed); }
 
     // Per-site allowlist (KTD8). Mutated and queried from the caller thread.
+    // Hosts are keyed on the *site* — the top-level document's host — not on the
+    // request's own host, matching Brave's per-site Shields (an exact-host
+    // content-settings pattern on the tab URL): allowlisting a site turns off
+    // blocking, CSP, and cosmetic filtering for everything loaded on its pages,
+    // while requests *to* that host from other sites are still filtered.
     void setAllowlistedHosts(HashSet<String>&&);
     void addAllowlistedHost(const String&);
     void removeAllowlistedHost(const String&);
     bool isAllowlistedHost(const String&) const;
 
     // Async queries. Each is invoked on and completed on the main run loop.
-    // Before any list has loaded, or for an allowlisted host, they complete with
-    // the pass-through default without touching the engine.
+    // Before any list has loaded, or when `sourceHostname` / `siteHostname` (the
+    // top-level document's host) is allowlisted, they complete with the
+    // pass-through default without touching the engine.
     void checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(AdBlockEngine::CheckResult)>&&);
     // The navigation's CSP directives (U5) and cosmetic resources — hide
     // selectors, exceptions, scriptlet, generichide flag (U6) — for a document/
@@ -88,10 +94,10 @@ public:
     // R3 pre-paint budget); both results are isolated and delivered together on
     // the main run loop.
     void cspAndCosmeticResources(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String cspDirectives, AdBlockCosmeticResources)>&&);
-    void hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& hostname, CompletionHandler<void(Vector<String>)>&&);
+    void hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& siteHostname, CompletionHandler<void(Vector<String>)>&&);
 
     // Number of queries that actually reached the engine. A test hook: an
-    // allowlisted host or a query issued before any list loaded never increments
+    // allowlisted site or a query issued before any list loaded never increments
     // it. Thread-safe.
     uint64_t engineQueryCount() const { return m_engineQueryCount.load(std::memory_order_relaxed); }
 

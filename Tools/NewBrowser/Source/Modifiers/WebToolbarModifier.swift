@@ -93,6 +93,86 @@ private struct MediaCaptureStateButtonView: View {
     }
 }
 
+// The per-site ad blocking control, after Brave's Shields button: shows whether
+// the current site is being filtered and lets the user turn ad blocking off for
+// it when it breaks a page. Changing it reloads the page, since what was already
+// loaded (or blocked) cannot be undone in place.
+private struct AdBlockShieldButton: View {
+    let page: WebPage
+
+    @State
+    private var model = AdBlockModel.shared
+
+    @State
+    private var isPopoverPresented = false
+
+    private var site: String? {
+        AdBlockModel.site(for: page.url)
+    }
+
+    private var isBlockingHere: Bool {
+        guard model.isEnabled, let site else {
+            return false
+        }
+        return model.isBlocking(onSite: site)
+    }
+
+    var body: some View {
+        Button {
+            isPopoverPresented.toggle()
+        } label: {
+            Label(
+                isBlockingHere ? "Ad Blocking On" : "Ad Blocking Off",
+                systemImage: isBlockingHere ? "shield.lefthalf.filled" : "shield.slash"
+            )
+            .labelStyle(.iconOnly)
+        }
+        .disabled(site == nil)
+        .help(isBlockingHere ? "Ad blocking is on for this site" : "Ad blocking is off for this site")
+        .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
+            if let site {
+                popoverContent(site: site)
+                    .presentationCompactAdaptation(.popover)
+            }
+        }
+    }
+
+    private func popoverContent(site: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(site)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Toggle(
+                "Block ads and trackers on this site",
+                isOn: Binding(
+                    get: { model.isBlocking(onSite: site) },
+                    set: { isBlocking in
+                        Task {
+                            await model.setBlocking(isBlocking, onSite: site)
+                            page.reload()
+                        }
+                    }
+                )
+            )
+            .toggleStyle(.switch)
+            .disabled(!model.isEnabled)
+
+            Text(
+                model.isEnabled
+                    ? "If this site isn't working, turn this off. The page will reload."
+                    : "Ad blocking is turned off for all sites in Settings."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(width: 280)
+    }
+}
+
 private struct WebToolbarModifier: ViewModifier {
     #if os(iOS)
     private static let navigationToolbarItemPlacement = ToolbarItemPlacement.bottomBar
@@ -167,6 +247,8 @@ private struct WebToolbarModifier: ViewModifier {
                         }
                         .keyboardShortcut("r")
                     }
+
+                    AdBlockShieldButton(page: viewModel.page)
 
                     MediaCaptureStateButtonView(
                         captureState: viewModel.page.cameraCaptureState,

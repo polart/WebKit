@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 //
 // Delivers the bundled adblock data to the NetworkProcess and exposes the
-// resulting filter-list state to Settings.
+// resulting filter-list state to Settings, plus the per-site "turn off ad
+// blocking here" exceptions behind the toolbar shield.
 //
 // This is the browser-side half of the split Brave draws between its component
 // layer and the shields engine: WebKit owns the engine, the catalog parser, and
@@ -62,6 +63,13 @@ final class AdBlockModel {
 
     /// True once the catalog has been delivered and read back at least once.
     private(set) var isLoaded = false
+
+    /// Sites the user turned ad blocking off for, sorted for display.
+    ///
+    /// WebKit keys these on the site being visited — the top-level page's exact
+    /// host, as Brave's Shields do — so an entry exempts everything loaded on
+    /// that site's pages and nothing loaded on other sites.
+    private(set) var allowlistedSites: [String] = []
 
     var isEnabled = false {
         didSet {
@@ -139,6 +147,47 @@ final class AdBlockModel {
         }
     }
 
+    // MARK: - Per-site exceptions
+
+    /// The host ad blocking would be turned off for on `url`, or nil for pages
+    /// that have no site to key on (blank pages, files, web archives).
+    static func site(for url: URL?) -> String? {
+        guard let url, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            return nil
+        }
+        // WebKit compares the canonical (lowercased, punycode) host.
+        guard let host = url.host(percentEncoded: true)?.lowercased(), !host.isEmpty else {
+            return nil
+        }
+        return host
+    }
+
+    func isBlocking(onSite site: String) -> Bool {
+        !allowlistedSites.contains(site)
+    }
+
+    /// Turns ad blocking on or off for `site`.
+    ///
+    /// Returns once the NetworkProcess has applied the change, so a reload
+    /// issued afterwards is filtered under the new setting.
+    func setBlocking(_ isBlocking: Bool, onSite site: String) async {
+        if isBlocking {
+            store._removeAdBlockAllowlistHost(site)
+            allowlistedSites.removeAll { $0 == site }
+        } else {
+            store._addAdBlockAllowlistHost(site)
+            if !allowlistedSites.contains(site) {
+                allowlistedSites.append(site)
+                allowlistedSites.sort()
+            }
+        }
+        Self.logger.log("ad blocking \(isBlocking ? "enabled" : "disabled", privacy: .public) on \(site, privacy: .private)")
+
+        // The state read travels the same connection as the change, so its reply
+        // also confirms the change has landed.
+        await reloadState()
+    }
+
     private func startPeriodicRefresh() {
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
@@ -163,6 +212,7 @@ final class AdBlockModel {
         let state = await store._getAdBlockState()
 
         adopt(isEnabled: state["enabled"] as? Bool ?? false)
+        allowlistedSites = (state["allowlist"] as? [String] ?? []).sorted()
 
         guard let entries = state["catalogLists"] as? [[String: Any]] else {
             Self.logger.error("adblock state carried no catalogLists")

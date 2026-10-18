@@ -65,7 +65,7 @@ struct AdBlockAPITests {
     // MARK: Scenario 2 — per-site allowlist
 
     @Test
-    func allowlistExemptsHostFromBlocking() async throws {
+    func allowlistExemptsSiteFromBlocking() async throws {
         try await AdBlockTest.withPage { store in
             store._setAdBlockEnabled(true)
             store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
@@ -73,13 +73,36 @@ struct AdBlockAPITests {
             var settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
 
-            store._addAdBlockAllowlistHost("ads.example.com")
+            // The allowlist keys on the site being visited (the page is on
+            // example.com), so the third-party ad on it is let through…
+            store._addAdBlockAllowlistHost("example.com")
             settled = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(settled)
 
-            store._removeAdBlockAllowlistHost("ads.example.com")
+            // …and blocked again once the site is removed.
+            store._removeAdBlockAllowlistHost("example.com")
             settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
+        }
+    }
+
+    @Test
+    func allowlistingRequestHostDoesNotExemptItOnOtherSites() async throws {
+        try await AdBlockTest.withPage { store in
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+        } body: { page, store in
+            let settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
+            #expect(settled)
+
+            // Allowlisting the ad server itself is a per-site setting for
+            // ads.example.com pages, not a pass for its requests everywhere. The
+            // state read is ordered after the add, so the gate is in place before
+            // the probe runs.
+            store._addAdBlockAllowlistHost("ads.example.com")
+            _ = await store._getAdBlockState()
+            let stillBlocked = try await AdBlockTest.adSubresourceBlocked(page)
+            #expect(stillBlocked)
         }
     }
 
