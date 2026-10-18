@@ -17,7 +17,7 @@
 #include <JavaScriptCore/JSStringRef.h>
 #include <JavaScriptCore/JSValueRef.h>
 #include <JavaScriptCore/OpaqueJSString.h>
-#include <JavaScriptCore/SourceTaintedOrigin.h>
+#include <JavaScriptCore/SourceTaintedness.h>
 #include <WebCore/DOMWrapperWorld.h>
 #include <WebCore/Document.h>
 #include <WebCore/DocumentInlines.h>

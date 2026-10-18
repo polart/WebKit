@@ -97,7 +97,7 @@ static bool parseSources(const JSON::Object& object, AdBlockCatalogEntry& entry)
         auto format = source->getString("format"_s);
         // An absent format defaults to Standard upstream.
         if (!format.isEmpty() && format != supportedSourceFormat) {
-            RELEASE_LOG(AdBlock, "AdBlockCatalog: skipping source in \"%{public}s\" with unsupported format", entry.title.utf8().data());
+            RELEASE_LOG(AdBlock, "AdBlockCatalog: skipping source in \"%{public}s\" with unsupported format", entry.title.utf8());
             continue;
         }
 
