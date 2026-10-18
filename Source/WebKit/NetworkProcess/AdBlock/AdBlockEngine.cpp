@@ -37,7 +37,7 @@ struct AdBlockEngineHolder {
 static std::string ffiString(const String& string)
 {
     auto utf8 = string.utf8();
-    return std::string(utf8.data(), utf8.length());
+    return utf8.toStdString();
 }
 
 static std::vector<uint8_t> ffiBytes(std::span<const uint8_t> bytes)

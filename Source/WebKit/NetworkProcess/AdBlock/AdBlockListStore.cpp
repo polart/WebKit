@@ -538,7 +538,7 @@ bool AdBlockListStore::applyCatalogDefaults()
         if (shouldPreselectRegional && !state.userTouched && !state.enabled && entry.supportsCurrentPlatform() && entry.matchesLocale(locale)) {
             state.enabled = true;
             changed = true;
-            RELEASE_LOG(AdBlock, "AdBlockListStore: preselecting regional list \"%{public}s\" for locale %{public}s", entry.title.utf8().data(), locale.utf8().data());
+            RELEASE_LOG(AdBlock, "AdBlockListStore: preselecting regional list \"%{public}s\" for locale %{public}s", entry.title.utf8(), locale.utf8());
         }
     }
 
@@ -636,7 +636,7 @@ void AdBlockListStore::setCatalogListEnabled(const String& uuid, bool enabled)
 
 void AdBlockListStore::startCatalogListDownload(const AdBlockCatalogEntry& entry)
 {
-    RELEASE_LOG(AdBlock, "AdBlockListStore: fetching catalog list \"%{public}s\" from %zu source(s)", entry.title.utf8().data(), entry.sources.size());
+    RELEASE_LOG(AdBlock, "AdBlockListStore: fetching catalog list \"%{public}s\" from %zu source(s)", entry.title.utf8(), entry.sources.size());
     fetchCatalogSources(entry.uuid, Vector<URL> { entry.sources }, 0, Vector<uint8_t> { });
 }
 

@@ -175,7 +175,7 @@ void checkNetworkRequest(NetworkProcess& networkProcess, SecurityOrigin* topOrig
     manager->checkRequest(urlString, hostname, sourceHostname, requestType, isThirdParty, [finish = WTF::move(finish), request = WTF::move(request), urlString, requestType, completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
         bool blocked = isBlockingResult(result);
         if (blocked)
-            RELEASE_LOG(AdBlock, "AdBlock: blocked %{public}s (%{public}s)", urlString.utf8().data(), requestType.characters());
+            RELEASE_LOG(AdBlock, "AdBlock: blocked %{public}s (%{public}s)", urlString.utf8(), requestType.characters());
         finish(WTF::move(request), blocked, WTF::move(completion));
     });
 }
@@ -215,7 +215,7 @@ void checkWebSocketRequest(NetworkProcess& networkProcess, const SecurityOriginD
     networkProcess.adBlockManager().checkRequest(url.string(), url.host().toString(), topOrigin.host(), "websocket"_s, isThirdParty, [urlString = url.string(), completion = WTF::move(completion)](AdBlockEngine::CheckResult result) mutable {
         bool blocked = isBlockingResult(result);
         if (blocked)
-            RELEASE_LOG(AdBlock, "AdBlock: blocked websocket %{public}s", urlString.utf8().data());
+            RELEASE_LOG(AdBlock, "AdBlock: blocked websocket %{public}s", urlString.utf8());
         completion(blocked);
     });
 }
