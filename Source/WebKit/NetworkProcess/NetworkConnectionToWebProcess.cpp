@@ -2221,22 +2221,25 @@ void NetworkConnectionToWebProcess::removeSyntheticParkedLoaderForTesting(Networ
 #endif
 
 #if ENABLE(ADBLOCK)
-void NetworkConnectionToWebProcess::hiddenClassIdSelectors(WebPageProxyIdentifier pageID, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>)>&& completionHandler)
+void NetworkConnectionToWebProcess::hiddenClassIdSelectors(WebPageProxyIdentifier pageID, Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, String&& hostname, CompletionHandler<void(Vector<String>&&, std::optional<Seconds>)>&& completionHandler)
 {
     // Rate-limit the query before it reaches the shared engine. The policy lives in
     // the AdBlock component: it caps the per-message exceptions vector (the engine
     // deep-copies and FFI-marshals it) and counts classes + ids + exceptions against
     // a per-page window, so a hostile or runaway process cannot bypass the budget via
     // a large exceptions set, and one page cannot starve dynamic hiding for others on
-    // this connection. A throttled query gets a pass-through (empty) reply.
-    bool shouldLog = false;
-    if (!m_adBlockDynamicHidingLimiter.allowQuery(pageID, classes.size(), ids.size(), exceptions.size(), shouldLog)) {
-        if (shouldLog)
+    // this connection. A throttled query gets an empty reply carrying the time until
+    // the page's window resets, so the web process re-queries those tokens then.
+    auto decision = m_adBlockDynamicHidingLimiter.checkQuery(pageID, classes.size(), ids.size(), exceptions.size());
+    if (!decision.isAllowed) {
+        if (decision.shouldLog)
             CONNECTION_RELEASE_LOG_ERROR(Network, "hiddenClassIdSelectors: dynamic-hiding token budget exceeded for page, throttling queries for this window");
-        return completionHandler({ });
+        return completionHandler({ }, decision.retryAfter);
     }
 
-    m_networkProcess->adBlockManager().hiddenClassIdSelectors(WTF::move(classes), WTF::move(ids), WTF::move(exceptions), hostname, WTF::move(completionHandler));
+    m_networkProcess->adBlockManager().hiddenClassIdSelectors(WTF::move(classes), WTF::move(ids), WTF::move(exceptions), hostname, [completionHandler = WTF::move(completionHandler)](Vector<String> selectors) mutable {
+        completionHandler(WTF::move(selectors), std::nullopt);
+    });
 }
 #endif
 

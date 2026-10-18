@@ -17,6 +17,7 @@
 #if ENABLE(ADBLOCK)
 
 #include "WebPageProxyIdentifier.h"
+#include <optional>
 #include <wtf/HashMap.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/Seconds.h>
@@ -40,27 +41,37 @@ public:
     static constexpr unsigned maxTokensPerWindow = 10000;
     static constexpr Seconds windowDuration = 10_s;
 
+    struct Decision {
+        bool isAllowed { false };
+        // Set only when the query was throttled by the page's window budget (rather
+        // than rejected outright): the time until that window resets, after which the
+        // same tokens can be re-queried. The web process holds them until then, so a
+        // throttled batch is delayed, not silently dropped.
+        std::optional<Seconds> retryAfter;
+        // True exactly once per window, the first time a page trips its budget, so
+        // the caller can log without spamming.
+        bool shouldLog { false };
+    };
+
     // Decide whether a dynamic-hiding query from `page` carrying these vector sizes
     // may reach the engine. classes, ids AND exceptions all count against the page's
-    // window, so the exceptions vector can no longer bypass the budget. Returns false
-    // (the caller replies empty) when a single message exceeds the per-query exception
-    // cap, or when the page is over its per-window token budget. `shouldLog` is set
-    // true exactly once per window the first time a page trips its budget, so the
-    // caller can log without spamming.
-    bool allowQuery(WebPageProxyIdentifier page, unsigned classCount, unsigned idCount, unsigned exceptionCount, bool& shouldLog)
+    // window, so the exceptions vector cannot bypass the budget. A single message over
+    // the per-query exception cap is rejected with no retry (resending it cannot
+    // succeed). A query that does not fit in what remains of the page's window is
+    // throttled with a retry time, and is not charged against the window: a large
+    // batch that does not fit must not starve the smaller ones that still do.
+    Decision checkQuery(WebPageProxyIdentifier page, unsigned classCount, unsigned idCount, unsigned exceptionCount)
     {
-        shouldLog = false;
-
         // Over-cap single message: reject before the engine deep-copies/marshals it,
         // and without disturbing the window counter (so it is not itself a throttle).
         if (exceptionCount > maxExceptionsPerQuery)
-            return false;
+            return { };
 
         auto now = MonotonicTime::now();
         pruneStaleEntries(now);
 
-        auto& budget = m_budgets.ensure(page, [] {
-            return PageBudget { };
+        auto& budget = m_budgets.ensure(page, [&] {
+            return PageBudget { now };
         }).iterator->value;
         if (now - budget.windowStart > windowDuration) {
             budget.windowStart = now;
@@ -68,21 +79,25 @@ public:
             budget.didLogThisWindow = false;
         }
 
-        budget.tokensInWindow += classCount + idCount + exceptionCount;
-        if (budget.tokensInWindow > maxTokensPerWindow) {
+        // 64-bit sum: three IPC-supplied sizes must not wrap past the budget check.
+        uint64_t tokenCount = static_cast<uint64_t>(classCount) + idCount + exceptionCount;
+        if (budget.tokensInWindow + tokenCount > maxTokensPerWindow) {
+            Decision decision;
+            decision.retryAfter = std::max(windowDuration - (now - budget.windowStart), 0_s);
             if (!budget.didLogThisWindow) {
                 budget.didLogThisWindow = true;
-                shouldLog = true;
+                decision.shouldLog = true;
             }
-            return false;
+            return decision;
         }
-        return true;
+        budget.tokensInWindow += tokenCount;
+        return { true, std::nullopt, false };
     }
 
 private:
     struct PageBudget {
         MonotonicTime windowStart;
-        unsigned tokensInWindow { 0 };
+        uint64_t tokensInWindow { 0 };
         bool didLogThisWindow { false };
     };
 

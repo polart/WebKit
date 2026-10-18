@@ -34,12 +34,27 @@
 namespace WebKit {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(AdBlockPageAgent);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AdBlockPageAgent::FrameDynamicState);
 
 // Identifier for the dynamic hide selectors' content-extension stylesheet. Kept
 // distinct from U6's static "WebKitAdBlockCosmetic" sheet: addDisplayNoneSelector
 // de-duplicates by selector id within a sheet, so a shared identifier would make
 // the dynamic ids (which restart per document) collide with the static ones.
 static constexpr auto dynamicCosmeticIdentifier = "WebKitAdBlockCosmeticDynamic"_s;
+
+// Upper bound on class + id tokens per HiddenClassIdSelectors message. A batch larger
+// than the NetworkProcess's whole per-window budget (AdBlockDynamicHidingLimiter)
+// could never be admitted, so a big initial scan or a backlog of throttled tokens is
+// split into messages that each fit comfortably within one window.
+static constexpr size_t maxTokensPerQuery = 1024;
+
+// Cap on tokens held per frame (per kind) awaiting a retry after throttling, so a
+// page that keeps outrunning the budget cannot grow the backlog without bound.
+// Tokens past the cap are dropped from the backlog and forgotten as seen.
+static constexpr unsigned maxThrottledTokensPerFrame = 8192;
+
+// Floor on the retry delay, so a near-zero retryAfter cannot spin a hot retry loop.
+static constexpr Seconds minimumRetryDelay = 100_ms;
 
 // Wraps the engine's `injected_script` in the runtime context uBlock Origin's
 // scriptlets are written against: `scriptletGlobals` (a Proxy-wrapped Map that
@@ -90,14 +105,28 @@ static ASCIILiteral dynamicHidingAgentSource()
 {
     return "(function(report) {"
         "\"use strict\";"
-        "var seenC = Object.create(null), seenI = Object.create(null);"
+        // Bounded seen-token set (same two-generation scheme as the native
+        // RecentTokenSet): a long-lived single-page app can cycle through unbounded
+        // distinct tokens over one document. Returns true for a token not recently
+        // seen; a token found in the previous generation is promoted.
+        "function recent() {"
+            "var cur = new Set(), prev = new Set();"
+            "return function(t) {"
+                "if (cur.has(t)) return false;"
+                "var isNew = !prev.delete(t);"
+                "if (cur.size >= 4096) { prev = cur; cur = new Set(); }"
+                "cur.add(t);"
+                "return isNew;"
+            "};"
+        "}"
+        "var seenC = recent(), seenI = recent();"
         "var pendC = [], pendI = [], scheduled = false;"
         "function collect(el) {"
             "if (!el || el.nodeType !== 1) return;"
             "var cl = el.classList, i;"
-            "if (cl) for (i = 0; i < cl.length; i++) { var t = cl[i]; if (t && !seenC[t]) { seenC[t] = 1; pendC.push(t); } }"
+            "if (cl) for (i = 0; i < cl.length; i++) { var t = cl[i]; if (t && seenC(t)) pendC.push(t); }"
             "var id = el.id;"
-            "if (id && !seenI[id]) { seenI[id] = 1; pendI.push(id); }"
+            "if (id && seenI(id)) pendI.push(id);"
         "}"
         "function scan(root) {"
             "collect(root);"
@@ -126,7 +155,7 @@ static ASCIILiteral dynamicHidingAgentSource()
         // scores mutation volume and, past a threshold, disconnects the observer for
         // periodic full-document querySelectorAll polling (returning to the observer
         // after ~10s). Not ported: the query/IPC cost is already bounded here by the
-        // timer-batched flush + permanent seen-token de-dup and by the NetworkProcess
+        // timer-batched flush + seen-token de-dup and by the NetworkProcess
         // token budget, so only add the polling switch if profiling shows this callback
         // hot on real pages.
         "try {"
@@ -200,7 +229,27 @@ static JSValueRef reportTokensCallback(JSContextRef context, JSObjectRef, JSObje
     return JSValueMakeUndefined(context);
 }
 
-AdBlockPageAgent::AdBlockPageAgent() = default;
+bool AdBlockPageAgent::RecentTokenSet::add(const String& token)
+{
+    if (m_current.contains(token))
+        return false;
+    bool isNewToken = !m_previous.remove(token);
+    if (m_current.size() >= maxGenerationSize)
+        m_previous = std::exchange(m_current, { });
+    m_current.add(token);
+    return isNewToken;
+}
+
+void AdBlockPageAgent::RecentTokenSet::remove(const String& token)
+{
+    m_current.remove(token);
+    m_previous.remove(token);
+}
+
+AdBlockPageAgent::AdBlockPageAgent()
+    : m_dynamicHidingRetryTimer(RunLoop::mainSingleton(), "AdBlockPageAgent::DynamicHidingRetryTimer"_s, this, &AdBlockPageAgent::retryThrottledTokens)
+{
+}
 
 AdBlockPageAgent::~AdBlockPageAgent() = default;
 
@@ -237,14 +286,23 @@ void AdBlockPageAgent::injectPendingScriptlet(WebCore::LocalFrame& frame, WebCor
 
 void AdBlockPageAgent::setDynamicHidingEnabled(WebCore::FrameIdentifier frameID, Vector<String>&& exceptions)
 {
-    FrameDynamicState state;
-    state.exceptions = WTF::move(exceptions);
+    auto state = makeUniqueRef<FrameDynamicState>();
+    state->generation = ++m_nextDynamicStateGeneration;
+    state->exceptions = WTF::move(exceptions);
     m_frameDynamicState.set(frameID, WTF::move(state));
 }
 
 void AdBlockPageAgent::clearDynamicHiding(WebCore::FrameIdentifier frameID)
 {
     m_frameDynamicState.remove(frameID);
+}
+
+auto AdBlockPageAgent::dynamicState(WebCore::FrameIdentifier frameID, uint64_t generation) -> FrameDynamicState*
+{
+    auto it = m_frameDynamicState.find(frameID);
+    if (it == m_frameDynamicState.end() || it->value->generation != generation)
+        return nullptr;
+    return it->value.ptr();
 }
 
 void AdBlockPageAgent::injectDynamicHidingAgentIfNeeded(WebFrame& webFrame, WebCore::DOMWrapperWorld& world)
@@ -255,9 +313,9 @@ void AdBlockPageAgent::injectDynamicHidingAgentIfNeeded(WebFrame& webFrame, WebC
         return;
 
     auto it = m_frameDynamicState.find(webFrame.frameID());
-    if (it == m_frameDynamicState.end() || it->value.agentInjected)
+    if (it == m_frameDynamicState.end() || it->value->agentInjected)
         return;
-    it->value.agentInjected = true;
+    it->value->agentInjected = true;
 
     JSGlobalContextRef context = webFrame.jsContextForWorld(adBlockWorld());
     if (!context)
@@ -278,25 +336,29 @@ void AdBlockPageAgent::injectDynamicHidingAgentIfNeeded(WebFrame& webFrame, WebC
 
 void AdBlockPageAgent::reportDynamicTokens(WebFrame& webFrame, Vector<String>&& classes, Vector<String>&& ids)
 {
-    auto frameID = webFrame.frameID();
-    auto it = m_frameDynamicState.find(frameID);
+    auto it = m_frameDynamicState.find(webFrame.frameID());
     if (it == m_frameDynamicState.end())
         return;
-    auto& state = it->value;
+    auto& state = it->value.get();
 
-    // Authoritative de-duplication: only tokens never queried for this frame cross
-    // the IPC boundary, so a token is asked about at most once per document.
+    // Authoritative de-duplication: only tokens not recently queried for this frame
+    // cross the IPC boundary.
     Vector<String> newClasses;
     for (auto& token : classes) {
-        if (!token.isEmpty() && state.seenClasses.add(token).isNewEntry)
+        if (!token.isEmpty() && state.seenClasses.add(token))
             newClasses.append(token);
     }
     Vector<String> newIds;
     for (auto& token : ids) {
-        if (!token.isEmpty() && state.seenIds.add(token).isNewEntry)
+        if (!token.isEmpty() && state.seenIds.add(token))
             newIds.append(token);
     }
-    if (newClasses.isEmpty() && newIds.isEmpty())
+    queryDynamicTokens(webFrame, state, WTF::move(newClasses), WTF::move(newIds));
+}
+
+void AdBlockPageAgent::queryDynamicTokens(WebFrame& webFrame, FrameDynamicState& state, Vector<String>&& classes, Vector<String>&& ids)
+{
+    if (classes.isEmpty() && ids.isEmpty())
         return;
 
     RefPtr coreFrame = webFrame.coreLocalFrame();
@@ -309,32 +371,90 @@ void AdBlockPageAgent::reportDynamicTokens(WebFrame& webFrame, Vector<String>&& 
     if (!webPage)
         return;
 
+    auto frameID = webFrame.frameID();
     auto hostname = document->url().host().toString();
-    auto exceptions = state.exceptions;
 
     // Key the NetworkProcess-side rate limiter per page (see AdBlockDynamicHidingLimiter),
     // so one busy page cannot exhaust the budget for the others sharing this connection.
     auto pageID = webPage->webPageProxyIdentifier();
 
-    Ref protectedFrame { webFrame };
-    WeakPtr weakDocument { *document };
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::HiddenClassIdSelectors(pageID, WTF::move(newClasses), WTF::move(newIds), WTF::move(exceptions), hostname), [weakThis = WeakPtr { *this }, frameID, protectedFrame = WTF::move(protectedFrame), weakDocument = WTF::move(weakDocument)](Vector<String>&& selectors) mutable {
-        if (!weakThis || selectors.isEmpty())
-            return;
-        // Drop the reply if the frame navigated away: the state was cleared, or the
-        // document that observed these tokens is no longer the frame's document.
-        RefPtr document = weakDocument.get();
-        RefPtr coreFrame = protectedFrame->coreLocalFrame();
-        if (!document || !coreFrame || coreFrame->document() != document.get())
-            return;
-        weakThis->applyDynamicSelectors(protectedFrame, frameID, selectors);
-    });
+    Ref connection = WebProcess::singleton().ensureNetworkProcessConnection().connection();
+    size_t classIndex = 0;
+    size_t idIndex = 0;
+    while (classIndex < classes.size() || idIndex < ids.size()) {
+        size_t classCount = std::min(classes.size() - classIndex, maxTokensPerQuery);
+        size_t idCount = std::min(ids.size() - idIndex, maxTokensPerQuery - classCount);
+        auto chunkClasses = classes.subvector(classIndex, classCount);
+        auto chunkIds = ids.subvector(idIndex, idCount);
+        classIndex += classCount;
+        idIndex += idCount;
+
+        // The tokens are copied into the reply handler too: if the query is throttled
+        // they are held for a retry rather than lost (the injected agent never
+        // reports a token twice, so this is the only chance to query it).
+        connection->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::HiddenClassIdSelectors(pageID, chunkClasses, chunkIds, state.exceptions, hostname), [weakThis = WeakPtr { *this }, frameID, generation = state.generation, protectedFrame = Ref { webFrame }, weakDocument = WeakPtr { *document }, chunkClasses, chunkIds](Vector<String>&& selectors, std::optional<Seconds> retryAfter) mutable {
+            if (!weakThis)
+                return;
+            // Drop the reply if the frame navigated away: the state was cleared, or the
+            // document that observed these tokens is no longer the frame's document.
+            RefPtr document = weakDocument.get();
+            RefPtr coreFrame = protectedFrame->coreLocalFrame();
+            if (!document || !coreFrame || coreFrame->document() != document.get())
+                return;
+            if (retryAfter) {
+                weakThis->handleThrottledTokens(frameID, generation, WTF::move(chunkClasses), WTF::move(chunkIds), *retryAfter);
+                return;
+            }
+            if (!selectors.isEmpty())
+                weakThis->applyDynamicSelectors(protectedFrame, frameID, generation, selectors);
+        });
+    }
 }
 
-void AdBlockPageAgent::applyDynamicSelectors(WebFrame& webFrame, WebCore::FrameIdentifier frameID, const Vector<String>& selectors)
+void AdBlockPageAgent::handleThrottledTokens(WebCore::FrameIdentifier frameID, uint64_t generation, Vector<String>&& classes, Vector<String>&& ids, Seconds retryAfter)
 {
-    auto it = m_frameDynamicState.find(frameID);
-    if (it == m_frameDynamicState.end())
+    auto* state = dynamicState(frameID, generation);
+    if (!state)
+        return;
+
+    auto hold = [](ListHashSet<String>& backlog, RecentTokenSet& seen, Vector<String>&& tokens) {
+        for (auto& token : tokens) {
+            if (backlog.size() < maxThrottledTokensPerFrame)
+                backlog.add(WTF::move(token));
+            else
+                seen.remove(token);
+        }
+    };
+    hold(state->throttledClasses, state->seenClasses, WTF::move(classes));
+    hold(state->throttledIds, state->seenIds, WTF::move(ids));
+
+    // Every frame's backlog is retried by one timer; keep the earliest deadline.
+    auto delay = std::max(retryAfter, minimumRetryDelay);
+    if (!m_dynamicHidingRetryTimer.isActive() || delay < m_dynamicHidingRetryTimer.secondsUntilFire())
+        m_dynamicHidingRetryTimer.startOneShot(delay);
+}
+
+void AdBlockPageAgent::retryThrottledTokens()
+{
+    for (auto& [frameID, entry] : m_frameDynamicState) {
+        auto& state = entry.get();
+        if (state.throttledClasses.isEmpty() && state.throttledIds.isEmpty())
+            continue;
+        auto classes = moveToVector(std::exchange(state.throttledClasses, { }));
+        auto ids = moveToVector(std::exchange(state.throttledIds, { }));
+        // The frame state is cleared on every provisional load, so a surviving entry
+        // still belongs to the document that observed these tokens.
+        RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
+        if (!webFrame)
+            continue;
+        queryDynamicTokens(*webFrame, state, WTF::move(classes), WTF::move(ids));
+    }
+}
+
+void AdBlockPageAgent::applyDynamicSelectors(WebFrame& webFrame, WebCore::FrameIdentifier frameID, uint64_t generation, const Vector<String>& selectors)
+{
+    auto* state = dynamicState(frameID, generation);
+    if (!state)
         return;
 
     RefPtr coreFrame = webFrame.coreLocalFrame();
@@ -345,9 +465,8 @@ void AdBlockPageAgent::applyDynamicSelectors(WebFrame& webFrame, WebCore::FrameI
         return;
 
 #if ENABLE(CONTENT_EXTENSIONS)
-    auto& state = it->value;
     for (auto& selector : selectors) {
-        if (selector.isEmpty() || !state.appliedSelectors.add(selector).isNewEntry)
+        if (selector.isEmpty() || !state->appliedSelectors.add(selector).isNewEntry)
             continue;
         if (m_nextDynamicSelectorID == std::numeric_limits<uint32_t>::max())
             break;
