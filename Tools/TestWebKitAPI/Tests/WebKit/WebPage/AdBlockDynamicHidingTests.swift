@@ -52,6 +52,10 @@
 // kind (class vs id), late insertion vs initial scan, the `#@#` exception set, and
 // the `$generichide` arming gate — not "default list vs user rule".
 //
+// `throttledTokensAreRetried` floods one document past the NetworkProcess's
+// per-page token budget and checks the throttled tail is re-queried after the
+// budget window resets rather than silently dropped.
+//
 // `tokensQueriedOnce` observes the WebProcess-side per-document de-duplication
 // through a process-global engine-query counter exposed for tests
 // (`-_getAdBlockEngineQueryCountWithCompletionHandler:`). It measures the counter
@@ -138,7 +142,7 @@ struct AdBlockDynamicHidingTests {
     @Test
     func tokensQueriedOnce() async throws {
         // The agent de-duplicates tokens per document (its `seenClasses` set), so a
-        // class already asked about never crosses the IPC again. Inserting 100
+        // class recently asked about does not cross the IPC again. Inserting 100
         // elements that all share one *new* class must therefore produce exactly one
         // additional engine query. Measured as the counter delta inside one settled
         // document: nothing else queries the engine in that window (no navigation, no
@@ -168,6 +172,55 @@ struct AdBlockDynamicHidingTests {
 
             let after = await store._getAdBlockEngineQueryCount()
             #expect(after - before == 1)
+        }
+    }
+
+    // MARK: Tokens throttled by the NetworkProcess budget are retried, not dropped
+
+    @Test
+    func throttledTokensAreRetried() async throws {
+        // The NetworkProcess admits at most 10000 tokens per page per 10s window
+        // (`AdBlockDynamicHidingLimiter`), and the WebProcess splits each report into
+        // queries of at most 1024 tokens. One mutation batch of 10239 unique filler
+        // classes followed by `.throttled-ad` is ten 1024-token class queries: the
+        // first nine (9216 tokens, plus the few the probe document used) fit, and the
+        // tenth — which carries `.throttled-ad` — does not. The injected agent never
+        // reports a token twice, so the ad is hidden only if the WebProcess holds the
+        // throttled query and re-sends it once the window resets.
+        try await withDynamicPage { store in
+            store._setAdBlockEnabled(true)
+            store._setAdBlockCustomRules(
+                """
+                ##.probe
+                ##.throttled-ad
+                """
+            )
+        } body: { page, _ in
+            #expect(try await dynamicPipelineLive(page, host: "example.com"))
+
+            _ = try await page.callJavaScript(
+                """
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < 10239; i++) {
+                    const el = document.createElement("div");
+                    el.className = "filler" + i;
+                    fragment.appendChild(el);
+                }
+                const ad = document.createElement("div");
+                ad.className = "throttled-ad";
+                ad.id = "throttledAd";
+                ad.textContent = "x";
+                fragment.appendChild(ad);
+                document.body.appendChild(fragment);
+                return true;
+                """
+            )
+
+            // Up to one full window passes before the retry is admitted.
+            let hidden = try await AdBlockTest.pollUntil(timeout: .seconds(25)) {
+                try await isHidden(page, selector: "#throttledAd")
+            }
+            #expect(hidden)
         }
     }
 

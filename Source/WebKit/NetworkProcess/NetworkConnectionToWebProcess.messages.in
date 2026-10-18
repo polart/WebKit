@@ -174,7 +174,9 @@ messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
     // seen in the DOM; the reply carries the generic hide selectors those tokens
     // match (with the navigation's exception set applied engine-side). Rate-limited
     // per page (pageID) to bound a hostile or runaway web process without letting one
-    // page starve dynamic hiding for the others sharing this connection.
-    HiddenClassIdSelectors(WebKit::WebPageProxyIdentifier pageID, Vector<String> classes, Vector<String> ids, Vector<String> exceptions, String hostname) -> (Vector<String> selectors)
+    // page starve dynamic hiding for the others sharing this connection. A throttled
+    // query replies with retryAfter set (time until the page's budget window resets)
+    // so the web process can re-query those tokens instead of dropping them.
+    HiddenClassIdSelectors(WebKit::WebPageProxyIdentifier pageID, Vector<String> classes, Vector<String> ids, Vector<String> exceptions, String hostname) -> (Vector<String> selectors, std::optional<Seconds> retryAfter)
 #endif
 }
