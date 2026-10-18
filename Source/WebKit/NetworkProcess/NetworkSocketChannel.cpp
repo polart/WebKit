@@ -75,7 +75,7 @@ NetworkSocketChannel::NetworkSocketChannel(NetworkConnectionToWebProcess& connec
         // U4 hook: block the handshake if the socket URL matches a filter rule.
         // Resume is deferred until the async check completes so a matched host is
         // refused before the connection opens.
-        AdBlock::checkWebSocketRequest(connection.networkProcess(), clientOrigin.topOrigin, request, [protectedThis = Ref { *this }](bool blocked) {
+        AdBlock::checkWebSocketRequest(NetworkProcess::singleton(), clientOrigin.topOrigin, request, [protectedThis = Ref { *this }](bool blocked) {
             if (blocked) {
                 protectedThis->didClose(0, "Blocked by adblock"_s);
                 return;

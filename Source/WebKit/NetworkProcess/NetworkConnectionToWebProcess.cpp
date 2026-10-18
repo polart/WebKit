@@ -2237,7 +2237,7 @@ void NetworkConnectionToWebProcess::hiddenClassIdSelectors(WebPageProxyIdentifie
         return completionHandler({ }, decision.retryAfter);
     }
 
-    m_networkProcess->adBlockManager().hiddenClassIdSelectors(WTF::move(classes), WTF::move(ids), WTF::move(exceptions), siteHostname, [completionHandler = WTF::move(completionHandler)](Vector<String> selectors) mutable {
+    NetworkProcess::singleton().adBlockManager().hiddenClassIdSelectors(WTF::move(classes), WTF::move(ids), WTF::move(exceptions), siteHostname, [completionHandler = WTF::move(completionHandler)](Vector<String> selectors) mutable {
         completionHandler(WTF::move(selectors), std::nullopt);
     });
 }
