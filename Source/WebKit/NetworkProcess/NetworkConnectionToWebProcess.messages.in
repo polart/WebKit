@@ -177,6 +177,6 @@ messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
     // page starve dynamic hiding for the others sharing this connection. A throttled
     // query replies with retryAfter set (time until the page's budget window resets)
     // so the web process can re-query those tokens instead of dropping them.
-    HiddenClassIdSelectors(WebKit::WebPageProxyIdentifier pageID, Vector<String> classes, Vector<String> ids, Vector<String> exceptions, String hostname) -> (Vector<String> selectors, std::optional<Seconds> retryAfter)
+    HiddenClassIdSelectors(WebKit::WebPageProxyIdentifier pageID, Vector<String> classes, Vector<String> ids, Vector<String> exceptions, String siteHostname) -> (Vector<String> selectors, std::optional<Seconds> retryAfter)
 #endif
 }

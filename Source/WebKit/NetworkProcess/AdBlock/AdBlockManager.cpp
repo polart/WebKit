@@ -205,7 +205,7 @@ bool AdBlockManager::isAllowlistedHost(const String& host) const
 
 void AdBlockManager::checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(AdBlockEngine::CheckResult)>&& completion)
 {
-    if (!isEnabled() || isAllowlistedHost(hostname)) {
+    if (!isEnabled() || isAllowlistedHost(sourceHostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
             completion(AdBlockEngine::CheckResult { });
         });
@@ -227,7 +227,7 @@ void AdBlockManager::checkRequest(const String& url, const String& hostname, con
 
 void AdBlockManager::cspAndCosmeticResources(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String, AdBlockCosmeticResources)>&& completion)
 {
-    if (!isEnabled() || isAllowlistedHost(hostname)) {
+    if (!isEnabled() || isAllowlistedHost(sourceHostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
             completion(String { }, AdBlockCosmeticResources { });
         });
@@ -246,7 +246,7 @@ void AdBlockManager::cspAndCosmeticResources(const String& url, const String& ho
             m_engineQueryCount.fetch_add(1, std::memory_order_relaxed);
             directives = engine->cspDirectives(url, hostname, sourceHostname, requestType, isThirdParty).isolatedCopy();
             resources = isolatedCopyCosmeticResources(AdBlock::parseCosmeticResources(engine->cosmeticResourcesJSON(url)));
-            // With an engine loaded and the host not allowlisted (short-circuited
+            // With an engine loaded and the site not allowlisted (short-circuited
             // above), run dynamic hiding unless the page opted out via generichide.
             resources.dynamicHidingEnabled = !resources.generichide;
         }
@@ -256,9 +256,9 @@ void AdBlockManager::cspAndCosmeticResources(const String& url, const String& ho
     });
 }
 
-void AdBlockManager::hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& hostname, CompletionHandler<void(Vector<String>)>&& completion)
+void AdBlockManager::hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& siteHostname, CompletionHandler<void(Vector<String>)>&& completion)
 {
-    if (!isEnabled() || isAllowlistedHost(hostname)) {
+    if (!isEnabled() || isAllowlistedHost(siteHostname)) {
         RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
             completion(Vector<String> { });
         });

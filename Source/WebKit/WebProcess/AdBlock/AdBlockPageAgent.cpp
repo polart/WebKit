@@ -372,7 +372,9 @@ void AdBlockPageAgent::queryDynamicTokens(WebFrame& webFrame, FrameDynamicState&
         return;
 
     auto frameID = webFrame.frameID();
-    auto hostname = document->url().host().toString();
+    // The per-site allowlist keys on the top-level document's host, so a
+    // subframe reports its tab's site rather than its own.
+    auto siteHostname = document->topOrigin().host();
 
     // Key the NetworkProcess-side rate limiter per page (see AdBlockDynamicHidingLimiter),
     // so one busy page cannot exhaust the budget for the others sharing this connection.
@@ -392,7 +394,7 @@ void AdBlockPageAgent::queryDynamicTokens(WebFrame& webFrame, FrameDynamicState&
         // The tokens are copied into the reply handler too: if the query is throttled
         // they are held for a retry rather than lost (the injected agent never
         // reports a token twice, so this is the only chance to query it).
-        connection->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::HiddenClassIdSelectors(pageID, chunkClasses, chunkIds, state.exceptions, hostname), [weakThis = WeakPtr { *this }, frameID, generation = state.generation, protectedFrame = Ref { webFrame }, weakDocument = WeakPtr { *document }, chunkClasses, chunkIds](Vector<String>&& selectors, std::optional<Seconds> retryAfter) mutable {
+        connection->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::HiddenClassIdSelectors(pageID, chunkClasses, chunkIds, state.exceptions, siteHostname), [weakThis = WeakPtr { *this }, frameID, generation = state.generation, protectedFrame = Ref { webFrame }, weakDocument = WeakPtr { *document }, chunkClasses, chunkIds](Vector<String>&& selectors, std::optional<Seconds> retryAfter) mutable {
             if (!weakThis)
                 return;
             // Drop the reply if the frame navigated away: the state was cleared, or the

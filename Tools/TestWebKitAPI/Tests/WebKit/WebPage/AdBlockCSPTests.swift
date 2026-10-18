@@ -195,8 +195,8 @@ struct AdBlockCSPTests {
             }
             #expect(scriptBlocked)
 
-            // …then allowlist the host (the request host is what the allowlist keys
-            // on for a main-frame document) and observe the injection stop.
+            // …then allowlist the site (a main-frame document is its own site) and
+            // observe the injection stop.
             store._addAdBlockAllowlistHost("csphost.example.com")
             let injectionStopped = try await AdBlockTest.pollUntil {
                 try await navigateAndReadInlineScriptRan(page, host: "csphost.example.com")
