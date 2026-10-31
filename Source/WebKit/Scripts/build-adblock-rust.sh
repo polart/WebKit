@@ -96,7 +96,11 @@ for arch in ${BUILD_ARCHS}; do
     # the build-script-executed message reports the exact OUT_DIR for the current
     # build hash on both fresh and incremental builds, so we never have to guess
     # among stale webkit-adblock-<hash> directories.
-    BUILD_JSON="$("${MISE}" exec -- cargo build ${CARGO_PROFILE_FLAG} --target "${triple}" --message-format=json-render-diagnostics)"
+    # Drop Xcode's MACOSX_DEPLOYMENT_TARGET: cargo applies it to host proc-macro
+    # dylibs too, and with the current Apple linker any value >= 15.0 yields
+    # dylibs dyld rejects ("mis-aligned LINKEDIT string pool"), surfacing as
+    # E0463 "can't find crate for `*_derive`". rustc's default (11.0) is fine.
+    BUILD_JSON="$(env -u MACOSX_DEPLOYMENT_TARGET "${MISE}" exec -- cargo build ${CARGO_PROFILE_FLAG} --target "${triple}" --message-format=json-render-diagnostics)"
 
     OUT_DIR="$(printf '%s\n' "${BUILD_JSON}" \
         | grep '"build-script-executed"' \
