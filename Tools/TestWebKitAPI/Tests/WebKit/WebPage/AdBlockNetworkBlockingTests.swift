@@ -26,12 +26,10 @@
 // embedder API, using the shared harness in `AdBlockTestSupport.swift`. Maps to
 // brave-core's `ad_block_service_browsertest.cc` network cases.
 //
-// Scope note: `redirectHopReEvaluated` is covered here via `ProxyRoute.redirect`
-// and `blocksWebSocketOpen` via `ProxyHTTPServer`'s WebSocket handshake server
-// (`init(webSocketProtocol:)`) — both extend the project-owned `ProxyHTTPServer`
-// wrapper (status codes, response headers, redirects, WebSocket handshakes)
-// without patching WebKit's own files. Two cases remain deferred, both still
-// required by the plan:
+// Scope note: `redirectHopReEvaluated` is covered here via `Route.redirect` (a
+// file-local helper over upstream's `Route`) and `blocksWebSocketOpen` via the
+// project-owned `WebSocketTestServer`, neither of which patches WebKit's own
+// files. Two cases remain deferred, both still required by the plan:
 //
 //  - `blocksServiceWorkerRequest`: the network-blocking hook already covers it — `NetworkLoadChecker`
 //    is created unconditionally for every `NetworkResourceLoader`, through which a
@@ -122,11 +120,11 @@ struct AdBlockNetworkBlockingTests {
 
         // `tracker.com` and `example.com` are distinct registrable domains, so a
         // load of `tracker.com` is third-party from `example.com` and first-party
-        // from `tracker.com`. ProxyHTTPServer matches by path only, so both top
+        // from `tracker.com`. HTTPServer matches by path only, so both top
         // documents share the `/index` route and both fetch the `/t.js` route.
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            ProxyRoute("/t.js") { "globalThis.__t = true;" }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            Route("/t.js") { "globalThis.__t = true;" }
         }
 
         try await server.run { serverConfiguration in
@@ -177,10 +175,10 @@ struct AdBlockNetworkBlockingTests {
             </script></body></html>
             """
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            ProxyRoute("/frame") { frameHTML }
-            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            Route("/frame") { frameHTML }
+            Route("/ad.js") { "globalThis.__adLoaded = true;" }
         }
 
         try await server.run { serverConfiguration in
@@ -205,14 +203,14 @@ struct AdBlockNetworkBlockingTests {
         let directory = AdBlockTest.uniqueDirectory()
 
         // Both redirect endpoints live on an un-blocked host and 302 to the same
-        // `/ad.js` route; only the *target host* differs. ProxyHTTPServer matches
+        // `/ad.js` route; only the *target host* differs. HTTPServer matches
         // by path, so the block decision can only come from re-checking the redirect
         // hop's destination, not the initial (allowed) request URL.
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
-            ProxyRoute.redirect("/to-blocked", to: "https://ads.example.com/ad.js")
-            ProxyRoute.redirect("/to-allowed", to: "https://cdn.example.com/ad.js")
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            Route("/ad.js") { "globalThis.__adLoaded = true;" }
+            Route.redirect("/to-blocked", to: "https://ads.example.com/ad.js")
+            Route.redirect("/to-allowed", to: "https://cdn.example.com/ad.js")
         }
 
         try await server.run { serverConfiguration in
@@ -291,7 +289,7 @@ struct AdBlockNetworkBlockingTests {
     func blocksWebSocketOpen() async throws {
         let directory = AdBlockTest.uniqueDirectory()
 
-        var server = ProxyHTTPServer(webSocketProtocol: .http)
+        var server = try WebSocketTestServer()
 
         try await server.run { serverConfiguration in
             let webSocketURL = "ws://127.0.0.1:\(serverConfiguration.port)/"
@@ -320,6 +318,13 @@ struct AdBlockNetworkBlockingTests {
 }
 
 // MARK: - Helpers
+
+extension Route {
+    // A route that responds with an HTTP redirect to `location`.
+    fileprivate static func redirect(_ path: String, to location: String, statusCode: Int = 302) -> Route {
+        Route(path, statusCode: statusCode, headerFields: ["Location": location]) { "" }
+    }
+}
 
 extension AdBlockNetworkBlockingTests {
     // Appends a fresh subframe that runs the block probe and resolves with the

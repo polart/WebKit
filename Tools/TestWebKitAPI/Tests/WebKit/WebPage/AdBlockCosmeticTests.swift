@@ -311,9 +311,9 @@ extension AdBlockCosmeticTests {
     ) async throws {
         let directory = AdBlockTest.uniqueDirectory()
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/cosmetic", headers: Self.fixtureHeaders) { Self.fixtureHTML }
-            ProxyRoute("/cosframe", headers: Self.fixtureHeaders) { Self.frameFixtureHTML }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/cosmetic", headerFields: Self.fixtureHeaders) { Self.fixtureHTML }
+            Route("/cosframe", headerFields: Self.fixtureHeaders) { Self.frameFixtureHTML }
         }
 
         try await server.run { serverConfiguration in

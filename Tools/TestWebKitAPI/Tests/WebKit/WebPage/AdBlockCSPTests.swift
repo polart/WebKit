@@ -260,10 +260,10 @@ extension AdBlockCSPTests {
     ) async throws {
         let directory = AdBlockTest.uniqueDirectory()
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/csp", headers: Self.fixtureHeaders) { Self.fixtureHTML }
-            ProxyRoute("/owncsp", headers: Self.ownCSPHeaders) { Self.fixtureHTML }
-            ProxyRoute("/cspframe", headers: Self.fixtureHeaders) { Self.frameFixtureHTML }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/csp", headerFields: Self.fixtureHeaders) { Self.fixtureHTML }
+            Route("/owncsp", headerFields: Self.ownCSPHeaders) { Self.fixtureHTML }
+            Route("/cspframe", headerFields: Self.fixtureHeaders) { Self.frameFixtureHTML }
         }
 
         try await server.run { serverConfiguration in

@@ -312,7 +312,6 @@ list(APPEND TestWebKit_SOURCES
 
     Helpers/cocoa/HTTPServer.mm
     Helpers/cocoa/MiniTURNServer.mm
-    Helpers/cocoa/ProxyHTTPServer.mm
     Helpers/cocoa/TestCocoaImageAndCocoaColor.mm
     Helpers/cocoa/TestElementFullscreenDelegate.mm
     Helpers/cocoa/TestNSBundleExtras.m
@@ -771,6 +770,7 @@ add_library(TestWebKitAPILibrary OBJECT
     ${TESTWEBKITAPI_DIR}/Helpers/cocoa/WebPage+Extras.swift
     ${TESTWEBKITAPI_DIR}/Helpers/cocoa/WebPage+JavaScriptExpression.swift
     ${TESTWEBKITAPI_DIR}/Helpers/cocoa/WebPageConfiguration+Extras.swift
+    ${TESTWEBKITAPI_DIR}/Helpers/cocoa/WebSocketTestServer.swift
     ${TESTWEBKITAPI_DIR}/Helpers/cocoa/WKWebView+Extras.swift
 
     ${TESTWEBKITAPI_DIR}/InjectedBundle/cocoa/WebProcessPlugIn/WebProcessPlugInWithInternals.mm
