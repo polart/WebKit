@@ -113,8 +113,8 @@ struct AdBlockAPITests {
         let directory = AdBlockTest.uniqueDirectory()
         let listURL = try #require(URL(string: "https://lists.example.com/list.txt"))
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/list.txt") {
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/list.txt") {
                 "! Title: Test List\n\(AdBlockTest.blockAdsRule)\n"
             }
         }
@@ -156,9 +156,9 @@ struct AdBlockAPITests {
     func configurationSetBeforeNetworkProcessLaunchIsApplied() async throws {
         let directory = AdBlockTest.uniqueDirectory()
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
-            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { "<!DOCTYPE html><html><body>main</body></html>" }
+            Route("/ad.js") { "globalThis.__adLoaded = true;" }
         }
 
         try await server.run { serverConfiguration in

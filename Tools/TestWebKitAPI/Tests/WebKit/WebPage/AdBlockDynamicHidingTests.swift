@@ -320,8 +320,8 @@ extension AdBlockDynamicHidingTests {
     ) async throws {
         let directory = AdBlockTest.uniqueDirectory()
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/dynamic", headers: Self.fixtureHeaders) { Self.fixtureHTML }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/dynamic", headerFields: Self.fixtureHeaders) { Self.fixtureHTML }
         }
 
         try await server.run { serverConfiguration in

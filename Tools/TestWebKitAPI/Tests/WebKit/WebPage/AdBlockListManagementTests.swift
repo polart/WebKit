@@ -150,9 +150,9 @@ struct AdBlockListManagementTests {
     func customRulesSurviveRestart() async throws {
         let directory = AdBlockTest.uniqueDirectory()
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/index") { Self.mainHTML }
-            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { Self.mainHTML }
+            Route("/ad.js") { "globalThis.__adLoaded = true;" }
         }
 
         try await server.run { serverConfiguration in
@@ -185,9 +185,9 @@ struct AdBlockListManagementTests {
         let directory = AdBlockTest.uniqueDirectory()
         let listURL = try #require(URL(string: "https://lists.example.com/list.txt"))
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/index") { Self.mainHTML }
-            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { Self.mainHTML }
+            Route("/ad.js") { "globalThis.__adLoaded = true;" }
         }
 
         try await server.run { serverConfiguration in
@@ -226,9 +226,9 @@ struct AdBlockListManagementTests {
         let directory = AdBlockTest.uniqueDirectory()
         let listURL = try #require(URL(string: "https://lists.example.com/list.txt"))
 
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/index") { Self.mainHTML }
-            ProxyRoute("/ad.js") { "globalThis.__adLoaded = true;" }
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/index") { Self.mainHTML }
+            Route("/ad.js") { "globalThis.__adLoaded = true;" }
         }
 
         try await server.run { serverConfiguration in
@@ -340,8 +340,8 @@ struct AdBlockListManagementTests {
         // Both elements being hidden proves cosmetic `hide_selectors` are merged
         // across enabled lists (the `cosmetic_merge_unittest.cc` analogue), on the
         // same `createFromLists` path as the network union above.
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/cosmetic", headers: ["Content-Type": "text/html", "Cache-Control": "no-store"]) {
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/cosmetic", headerFields: ["Content-Type": "text/html", "Cache-Control": "no-store"]) {
                 Self.cosmeticHTML
             }
         }
@@ -381,8 +381,8 @@ struct AdBlockListManagementTests {
         // `csp_merge_unittest.cc` analogue), on the same `createFromLists` path as the
         // network and cosmetic unions above. `no-store` keeps every navigation a fresh
         // load re-evaluated against the current engine.
-        var server = ProxyHTTPServer(protocol: .httpsProxy) {
-            ProxyRoute("/csp", headers: ["Content-Type": "text/html", "Cache-Control": "no-store"]) {
+        var server = try HTTPServer(protocol: .httpsProxy) {
+            Route("/csp", headerFields: ["Content-Type": "text/html", "Cache-Control": "no-store"]) {
                 Self.cspHTML
             }
         }
