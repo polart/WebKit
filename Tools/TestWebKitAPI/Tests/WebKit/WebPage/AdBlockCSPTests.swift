@@ -52,8 +52,8 @@
 import Testing
 @_spi(Testing) import WebKit
 private import TestWebKitAPILibrary
+private import WebKit_Private._WKAdBlock
 private import WebKit_Private._WKWebsiteDataStoreConfiguration
-private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
 import struct Foundation.URL
 
@@ -64,8 +64,8 @@ struct AdBlockCSPTests {
     @Test
     func cspRuleBlocksInlineScript() async throws {
         try await withCSPPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||csphost.example.com^$csp=script-src 'none'")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||csphost.example.com^$csp=script-src 'none'")
         } body: { page, _ in
             // The engine build is async; poll (re-navigating) until the injected
             // policy takes effect and the inline script stops running.
@@ -92,8 +92,8 @@ struct AdBlockCSPTests {
         // style stays blocked *and* the script becomes blocked proves the two
         // policies were merged, not overwritten.
         try await withCSPPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||owncsp.example.com^$csp=script-src 'none'")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||owncsp.example.com^$csp=script-src 'none'")
         } body: { page, _ in
             let merged = try await AdBlockTest.pollUntil {
                 try await navigate(page, host: "owncsp.example.com", path: "/owncsp")
@@ -112,8 +112,8 @@ struct AdBlockCSPTests {
         // Two independent `$csp` rules for the same host contribute a `script-src`
         // and a `style-src` directive; both must be enforced on the one response.
         try await withCSPPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ||csphost.example.com^$csp=script-src 'none'
                 ||csphost.example.com^$csp=style-src 'none'
@@ -146,8 +146,8 @@ struct AdBlockCSPTests {
         // unmatched) keeps its inline style, proving the directives are keyed to the
         // frame's own URL rather than the top document's.
         try await withCSPPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||cspframe.example.com^$csp=style-src 'none'")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||cspframe.example.com^$csp=style-src 'none'")
         } body: { page, _ in
             try await navigate(page, host: "example.com")
             // Top document is unmatched, so its own inline style applies.
@@ -170,8 +170,8 @@ struct AdBlockCSPTests {
         // `script-src`) and the response's own `style-src` is still honored (inline
         // style blocked). Together those show the engine touched no headers.
         try await withCSPPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||ads.example.com^")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||ads.example.com^")
         } body: { page, _ in
             try await navigate(page, host: "owncsp.example.com", path: "/owncsp")
             // Nothing injected ⇒ the inline script is untouched and runs…
@@ -186,8 +186,8 @@ struct AdBlockCSPTests {
     @Test
     func cspNotInjectedWhenAllowlisted() async throws {
         try await withCSPPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||csphost.example.com^$csp=script-src 'none'")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||csphost.example.com^$csp=script-src 'none'")
         } body: { page, store in
             // First prove the injection is live for this host…
             let scriptBlocked = try await AdBlockTest.pollUntil {
@@ -197,7 +197,7 @@ struct AdBlockCSPTests {
 
             // …then allowlist the site (a main-frame document is its own site) and
             // observe the injection stop.
-            store._addAdBlockAllowlistHost("csphost.example.com")
+            store.adBlock.addAllowlistHost("csphost.example.com")
             let injectionStopped = try await AdBlockTest.pollUntil {
                 try await navigateAndReadInlineScriptRan(page, host: "csphost.example.com")
             }

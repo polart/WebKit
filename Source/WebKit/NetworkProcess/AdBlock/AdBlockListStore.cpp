@@ -420,10 +420,10 @@ void AdBlockListStore::refreshAllSubscriptions()
         refreshSubscription(url, [](bool) { });
 }
 
-Vector<AdBlockListStore::SubscriptionInfo> AdBlockListStore::subscriptions() const
+Vector<AdBlockSubscriptionState> AdBlockListStore::subscriptions() const
 {
     return m_subscriptions.map([](auto& sub) {
-        return SubscriptionInfo { sub.url.string(), sub.enabled, sub.title, sub.lastFetched };
+        return AdBlockSubscriptionState { sub.url, sub.enabled, sub.title, sub.lastFetched };
     });
 }
 
@@ -696,9 +696,9 @@ void AdBlockListStore::installCatalogListText(const String& uuid, std::span<cons
     scheduleRebuild();
 }
 
-Vector<AdBlockListStore::CatalogListInfo> AdBlockListStore::catalogLists() const
+Vector<AdBlockCatalogListState> AdBlockListStore::catalogLists() const
 {
-    Vector<CatalogListInfo> result;
+    Vector<AdBlockCatalogListState> result;
     result.reserveInitialCapacity(m_catalog.size());
     for (auto& entry : m_catalog) {
         // A list that cannot run on this platform is not an option the embedder
@@ -706,7 +706,7 @@ Vector<AdBlockListStore::CatalogListInfo> AdBlockListStore::catalogLists() const
         if (!entry.supportsCurrentPlatform())
             continue;
 
-        CatalogListInfo info;
+        AdBlockCatalogListState info;
         info.uuid = entry.uuid;
         info.title = entry.title;
         info.description = entry.description;
@@ -753,50 +753,15 @@ void AdBlockListStore::setEnabled(bool enabled)
     persistConfig();
 }
 
-String AdBlockListStore::stateJSON() const
+AdBlockState AdBlockListStore::state() const
 {
-    auto root = JSON::Object::create();
-    root->setBoolean("enabled"_s, m_enabled);
-    root->setString("customRules"_s, m_customRules);
-
-    auto allowlist = JSON::Array::create();
-    for (auto& host : m_allowlist)
-        allowlist->pushString(host);
-    root->setArray("allowlist"_s, WTF::move(allowlist));
-
-    auto subs = JSON::Array::create();
-    for (auto& sub : m_subscriptions) {
-        auto object = JSON::Object::create();
-        object->setString("url"_s, sub.url.string());
-        object->setBoolean("enabled"_s, sub.enabled);
-        object->setString("title"_s, sub.title);
-        object->setDouble("lastFetched"_s, sub.lastFetched);
-        subs->pushObject(WTF::move(object));
-    }
-    root->setArray("subscriptions"_s, WTF::move(subs));
-
-    auto catalogListsArray = JSON::Array::create();
-    for (auto& list : catalogLists()) {
-        auto object = JSON::Object::create();
-        object->setString("uuid"_s, list.uuid);
-        object->setString("title"_s, list.title);
-        object->setString("desc"_s, list.description);
-        object->setString("supportURL"_s, list.supportURL);
-        object->setBoolean("enabled"_s, list.enabled);
-        object->setBoolean("defaultEnabled"_s, list.defaultEnabled);
-        object->setBoolean("hidden"_s, list.hidden);
-        object->setDouble("lastFetched"_s, list.lastFetched);
-
-        auto languages = JSON::Array::create();
-        for (auto& language : list.languages)
-            languages->pushString(language);
-        object->setArray("langs"_s, WTF::move(languages));
-
-        catalogListsArray->pushObject(WTF::move(object));
-    }
-    root->setArray("catalogLists"_s, WTF::move(catalogListsArray));
-
-    return root->toJSONString();
+    return {
+        .enabled = m_enabled,
+        .customRules = m_customRules,
+        .allowlist = allowlistedHosts(),
+        .subscriptions = subscriptions(),
+        .catalogLists = catalogLists(),
+    };
 }
 
 void AdBlockListStore::scheduleRebuild()

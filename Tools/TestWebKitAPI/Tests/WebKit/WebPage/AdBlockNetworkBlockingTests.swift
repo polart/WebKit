@@ -53,8 +53,8 @@
 import Testing
 @_spi(Testing) import WebKit
 private import TestWebKitAPILibrary
+private import WebKit_Private._WKAdBlock
 private import WebKit_Private._WKWebsiteDataStoreConfiguration
-private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
 import struct Foundation.URL
 
@@ -65,8 +65,8 @@ struct AdBlockNetworkBlockingTests {
     @Test
     func blocksMatchingSubresource() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, _ in
             let settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
@@ -78,8 +78,8 @@ struct AdBlockNetworkBlockingTests {
     @Test
     func allowsNonMatchingSubresource() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, _ in
             // Prove the engine is live (the matching host is blocked)…
             let live = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
@@ -98,15 +98,15 @@ struct AdBlockNetworkBlockingTests {
     @Test
     func exceptionRuleAllows() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, store in
             // First observe the block so we know the engine is built and blocking,
             // then add the exception and observe it un-block after the rebuild.
             let blocked = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(blocked)
 
-            store._setAdBlockCustomRules("\(AdBlockTest.blockAdsRule)\n@@||ads.example.com^\n")
+            store.adBlock.setCustomRules("\(AdBlockTest.blockAdsRule)\n@@||ads.example.com^\n")
             let unblocked = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(unblocked)
         }
@@ -129,8 +129,8 @@ struct AdBlockNetworkBlockingTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||tracker.com^$third-party")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||tracker.com^$third-party")
 
             var configuration = WebPage.Configuration()
             configuration.websiteDataStore = store
@@ -183,8 +183,8 @@ struct AdBlockNetworkBlockingTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
 
             var configuration = WebPage.Configuration()
             configuration.websiteDataStore = store
@@ -215,8 +215,8 @@ struct AdBlockNetworkBlockingTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
 
             var configuration = WebPage.Configuration()
             configuration.websiteDataStore = store
@@ -249,13 +249,13 @@ struct AdBlockNetworkBlockingTests {
     @Test
     func subresourceBlockThenAllowRegression() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, store in
             let blocked = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(blocked)
 
-            store._setAdBlockCustomRules("")
+            store.adBlock.setCustomRules("")
             let unblocked = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(unblocked)
         }
@@ -266,8 +266,8 @@ struct AdBlockNetworkBlockingTests {
     @Test
     func flagOffLoadsEverything() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(false)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(false)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, _ in
             // With the master toggle off the engine is never consulted, so a
             // matching request loads. A single check suffices: "disabled" is a
@@ -295,8 +295,8 @@ struct AdBlockNetworkBlockingTests {
             let webSocketURL = "ws://127.0.0.1:\(serverConfiguration.port)/"
 
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: nil)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||127.0.0.1^")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||127.0.0.1^")
 
             var configuration = WebPage.Configuration()
             configuration.websiteDataStore = store
@@ -310,7 +310,7 @@ struct AdBlockNetworkBlockingTests {
             // Clearing the rule lets the very same endpoint open — a positive
             // control that rules out a generic (non-adblock) connection failure
             // reading as a false "blocked".
-            store._setAdBlockCustomRules("")
+            store.adBlock.setCustomRules("")
             let opens = try await AdBlockTest.pollUntil { !(try await webSocketBlocked(page, url: webSocketURL)) }
             #expect(opens)
         }

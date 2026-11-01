@@ -35,8 +35,8 @@
 // `injected_script` when the engine has a resource library that defines `name`.
 // This mirrors brave-core exactly — its scriptlet browser tests call the test
 // helper `UpdateAdBlockResources(resourcesJSON)` before injecting any `+js` rule.
-// The WebKit analogue is the `_setAdBlockResources:` SPI added for these tests
-// (`WKWebsiteDataStorePrivate` → `SetAdBlockResources` IPC →
+// The WebKit analogue is the `-[_WKAdBlockController setResources:]` SPI added
+// for these tests (`_WKAdBlock.h` → `SetAdBlockResources` IPC →
 // `AdBlockListStore::setResources`), the embedder path to the previously
 // caller-less in-memory `setResources` hook. The suite
 // installs a tiny library of self-contained scriptlets (`Self.resourcesJSON`) —
@@ -80,8 +80,8 @@
 import Testing
 @_spi(Testing) import WebKit
 private import TestWebKitAPILibrary
+private import WebKit_Private._WKAdBlock
 private import WebKit_Private._WKWebsiteDataStoreConfiguration
-private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
 import struct Foundation.URL
 import struct Foundation.Data
@@ -96,9 +96,9 @@ struct AdBlockScriptletTests {
         // records whether that global was *already* set when the page's own script
         // ran; a `true` there means the scriptlet executed before page scripts.
         try await withScriptletPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockResources(Self.resourcesJSON)
-            store._setAdBlockCustomRules("example.com##+js(set-ran)")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setResources(Self.resourcesJSON)
+            store.adBlock.setCustomRules("example.com##+js(set-ran)")
         } body: { page, _ in
             let ranBeforePageScripts = try await AdBlockTest.pollUntil {
                 try await navigate(page, host: "example.com")
@@ -116,9 +116,9 @@ struct AdBlockScriptletTests {
         // the injected script assigns exactly that string. Reading it back proves the
         // filter's argument was substituted into the resource template.
         try await withScriptletPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockResources(Self.resourcesJSON)
-            store._setAdBlockCustomRules("example.com##+js(set-arg,hello)")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setResources(Self.resourcesJSON)
+            store.adBlock.setCustomRules("example.com##+js(set-arg,hello)")
         } body: { page, _ in
             let boundArg = try await AdBlockTest.pollUntil {
                 try await navigate(page, host: "example.com")
@@ -137,9 +137,9 @@ struct AdBlockScriptletTests {
         // scriptlet global stays absent — the injection is keyed to the matched rule,
         // not merely to the library being present.
         try await withScriptletPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockResources(Self.resourcesJSON)
-            store._setAdBlockCustomRules("other.com##+js(set-ran)")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setResources(Self.resourcesJSON)
+            store.adBlock.setCustomRules("other.com##+js(set-ran)")
         } body: { page, _ in
             // First prove the mechanism is live for the host the rule *does* match, so
             // this is a genuine no-match and not a rule that never built.
@@ -165,9 +165,9 @@ struct AdBlockScriptletTests {
         // (main) world the page executes in — an isolated-world injection would leave
         // the page's `getComputedStyle` untouched.
         try await withScriptletPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockResources(Self.resourcesJSON)
-            store._setAdBlockCustomRules("example.com##+js(hijack-gcs)")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setResources(Self.resourcesJSON)
+            store.adBlock.setCustomRules("example.com##+js(hijack-gcs)")
         } body: { page, _ in
             let hijackedInPageWorld = try await AdBlockTest.pollUntil {
                 try await navigate(page, host: "example.com")
@@ -186,9 +186,9 @@ struct AdBlockScriptletTests {
         // document (`example.com`, unmatched) gets no injection — proving the
         // scriptlet is delivered per-document against each frame's navigation URL.
         try await withScriptletPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockResources(Self.resourcesJSON)
-            store._setAdBlockCustomRules("sfframe.example.com##+js(set-ran)")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setResources(Self.resourcesJSON)
+            store.adBlock.setCustomRules("sfframe.example.com##+js(set-ran)")
         } body: { page, _ in
             try await navigate(page, host: "example.com")
             // Top document is unmatched, so its scriptlet global is absent.
@@ -211,9 +211,9 @@ struct AdBlockScriptletTests {
         // co-located non-privileged `set-ran` *does* inject, so the assertion is a
         // real permission gate and not a blanket failure to build the rules.
         try await withScriptletPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockResources(Self.resourcesJSON)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setResources(Self.resourcesJSON)
+            store.adBlock.setCustomRules(
                 """
                 example.com##+js(set-ran)
                 example.com##+js(set-privileged)

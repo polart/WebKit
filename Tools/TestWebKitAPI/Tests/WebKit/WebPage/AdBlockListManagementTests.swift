@@ -30,8 +30,9 @@
 // assert blocking — they inject list content directly (`UpdateAdBlockInstanceWith
 // Rules` → `provider->OnComponentReady(path)`) and reserve the network path for a
 // couple of subscription-*state* tests. We mirror that: these tests install list
-// bodies through the `_setAdBlockListTextForTesting:forURL:` SPI, which stores the
-// text and rebuilds exactly as a completed download would, but without a fetch.
+// bodies through the `-[_WKAdBlockController _setListTextForTesting:forURL:]`
+// SPI, which stores the text and rebuilds exactly as a completed download would,
+// but without a fetch.
 // This is required here, not just convenient: NetworkProcess-originated list
 // downloads validate TLS, and `AdBlockListDownloader` cancels the server-trust
 // challenge for the test proxy's self-signed certificate, so a real subscription
@@ -71,6 +72,8 @@
 import Testing
 @_spi(Testing) import WebKit
 private import TestWebKitAPILibrary
+private import WebKit_Private._WKAdBlock
+private import WebKit_Private._WKAdBlockForTesting
 private import WebKit_Private._WKWebsiteDataStoreConfiguration
 private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
@@ -84,16 +87,16 @@ struct AdBlockListManagementTests {
     @Test
     func customRuleAddRemove() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
+            store.adBlock.setEnabled(true)
         } body: { page, store in
             // No custom rule yet ⇒ the ad loads.
             #expect(try await !AdBlockTest.adSubresourceBlocked(page))
 
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
             let blocked = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(blocked)
 
-            store._setAdBlockCustomRules("")
+            store.adBlock.setCustomRules("")
             let unblocked = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(unblocked)
         }
@@ -106,14 +109,14 @@ struct AdBlockListManagementTests {
         let listURL = try #require(URL(string: "https://lists.example.com/list.txt"))
 
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
+            store.adBlock.setEnabled(true)
         } body: { page, store in
             // Nothing installed yet, so the ad loads.
             #expect(try await !AdBlockTest.adSubresourceBlocked(page))
 
             // Installing the list registers the subscription and rebuilds the engine
             // in place — no process restart. Poll until the new list's rule applies.
-            store._setAdBlockListText(forTesting: "! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", for: listURL)
+            store.adBlock._setListTextForTesting("! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", url: listURL)
             let blocked = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(blocked)
         }
@@ -126,19 +129,19 @@ struct AdBlockListManagementTests {
         let listURL = try #require(URL(string: "https://lists.example.com/list.txt"))
 
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
+            store.adBlock.setEnabled(true)
         } body: { page, store in
-            store._setAdBlockListText(forTesting: "! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", for: listURL)
+            store.adBlock._setListTextForTesting("! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", url: listURL)
             var settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
 
             // Disabling the (only) list drops its rules from the rebuilt engine.
-            store._setAdBlockSubscription(with: listURL, enabled: false)
+            store.adBlock.setSubscriptionEnabled(false, url: listURL)
             settled = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(settled)
 
             // Re-enabling brings them back from the stored text (no re-fetch).
-            store._setAdBlockSubscription(with: listURL, enabled: true)
+            store.adBlock.setSubscriptionEnabled(true, url: listURL)
             settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
         }
@@ -157,8 +160,8 @@ struct AdBlockListManagementTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
 
             let page = Self.makePage(store: store)
             try await page.load(URL(string: "https://example.com/index")).wait()
@@ -192,8 +195,8 @@ struct AdBlockListManagementTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockListText(forTesting: "! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", for: listURL)
+            store.adBlock.setEnabled(true)
+            store.adBlock._setListTextForTesting("! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", url: listURL)
 
             let page = Self.makePage(store: store)
             try await page.load(URL(string: "https://example.com/index")).wait()
@@ -233,8 +236,8 @@ struct AdBlockListManagementTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockListText(forTesting: "! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", for: listURL)
+            store.adBlock.setEnabled(true)
+            store.adBlock._setListTextForTesting("! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", url: listURL)
 
             let page = Self.makePage(store: store)
             try await page.load(URL(string: "https://example.com/index")).wait()
@@ -272,9 +275,9 @@ struct AdBlockListManagementTests {
         let listURL = try #require(URL(string: "https://lists.example.com/list.txt"))
 
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
+            store.adBlock.setEnabled(true)
         } body: { page, store in
-            store._setAdBlockListText(forTesting: "! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", for: listURL)
+            store.adBlock._setListTextForTesting("! Title: Test List\n\(AdBlockTest.blockAdsRule)\n", url: listURL)
             let blocked = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(blocked)
 
@@ -285,14 +288,14 @@ struct AdBlockListManagementTests {
             // not observable here — it stays a manual/CI gate, as there is no
             // rebuild-count SPI, mirroring the warm-`.dat` no-re-parse gate above.)
             for enabled in [false, true, false, true, false] {
-                store._setAdBlockSubscription(with: listURL, enabled: enabled)
+                store.adBlock.setSubscriptionEnabled(enabled, url: listURL)
             }
             var settled = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(settled)
 
             // …and a burst ending "enabled" must converge to blocked.
             for enabled in [true, false, true, false, true] {
-                store._setAdBlockSubscription(with: listURL, enabled: enabled)
+                store.adBlock.setSubscriptionEnabled(enabled, url: listURL)
             }
             settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
@@ -310,10 +313,10 @@ struct AdBlockListManagementTests {
         // multi-list engine builder (`AdBlockEngine::createFromLists`) unions the
         // rules across every enabled list rather than replacing one with the next.
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
+            store.adBlock.setEnabled(true)
         } body: { page, store in
-            store._setAdBlockListText(forTesting: "! Title: List A\n||adsa.example.com^\n", for: listAURL)
-            store._setAdBlockListText(forTesting: "! Title: List B\n||adsb.example.com^\n", for: listBURL)
+            store.adBlock._setListTextForTesting("! Title: List A\n||adsa.example.com^\n", url: listAURL)
+            store.adBlock._setListTextForTesting("! Title: List B\n||adsb.example.com^\n", url: listBURL)
 
             let bothBlocked = try await AdBlockTest.pollUntil {
                 let a = try await AdBlockTest.subresourceBlocked(page, url: "https://adsa.example.com/ad.js")
@@ -348,9 +351,9 @@ struct AdBlockListManagementTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockListText(forTesting: "! Title: List A\nexample.com##.adA\n", for: listAURL)
-            store._setAdBlockListText(forTesting: "! Title: List B\nexample.com##.adB\n", for: listBURL)
+            store.adBlock.setEnabled(true)
+            store.adBlock._setListTextForTesting("! Title: List A\nexample.com##.adA\n", url: listAURL)
+            store.adBlock._setListTextForTesting("! Title: List B\nexample.com##.adB\n", url: listBURL)
 
             let page = Self.makePage(store: store)
 
@@ -389,9 +392,9 @@ struct AdBlockListManagementTests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockListText(forTesting: "! Title: List A\n||csphost.example.com^$csp=script-src 'none'\n", for: listAURL)
-            store._setAdBlockListText(forTesting: "! Title: List B\n||csphost.example.com^$csp=style-src 'none'\n", for: listBURL)
+            store.adBlock.setEnabled(true)
+            store.adBlock._setListTextForTesting("! Title: List A\n||csphost.example.com^$csp=script-src 'none'\n", url: listAURL)
+            store.adBlock._setListTextForTesting("! Title: List B\n||csphost.example.com^$csp=style-src 'none'\n", url: listBURL)
 
             let page = Self.makePage(store: store)
 
@@ -453,7 +456,7 @@ extension AdBlockListManagementTests {
     // `.dat`) calls these halves directly instead of `restart`.
     @MainActor
     fileprivate static func terminateAfterFlush(store: WKWebsiteDataStore) async throws {
-        _ = await store._getAdBlockState()
+        _ = await store.adBlock.state()
         store._terminateNetworkProcess()
     }
 
@@ -462,7 +465,7 @@ extension AdBlockListManagementTests {
     // the reloaded engine is warming by the time the page reloads.
     @MainActor
     fileprivate static func relaunchAndWarm(store: WKWebsiteDataStore) async throws {
-        _ = await store._getAdBlockState()
+        _ = await store.adBlock.state()
     }
 
     // Full restart with nothing to do in between: flush + terminate + relaunch.
