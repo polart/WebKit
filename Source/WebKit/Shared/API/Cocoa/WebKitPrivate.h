@@ -44,6 +44,7 @@
 #import <WebKit/WKWebViewConfigurationPrivate.h>
 #import <WebKit/WKWebViewPrivate.h>
 #import <WebKit/_WKActivatedElementInfo.h>
+#import <WebKit/_WKAdBlock.h>
 #import <WebKit/_WKAttachment.h>
 #import <WebKit/_WKCaptionStyleMenuController.h>
 #import <WebKit/_WKContentWorldConfiguration.h>

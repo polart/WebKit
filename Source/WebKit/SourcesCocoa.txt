@@ -284,6 +284,7 @@ UIProcess/API/C/cocoa/WKProtectionSpaceNS.mm @nonARC
 UIProcess/API/C/cocoa/WKWebsiteDataStoreRefPrivateMac.mm @nonARC
 
 UIProcess/API/Cocoa/_WKActivatedElementInfo.mm @nonARC
+UIProcess/API/Cocoa/_WKAdBlock.mm
 UIProcess/API/Cocoa/_WKAppHighlight.mm @nonARC
 UIProcess/API/Cocoa/_WKApplicationManifest.mm @nonARC
 UIProcess/API/Cocoa/_WKArchiveConfiguration.mm @nonARC

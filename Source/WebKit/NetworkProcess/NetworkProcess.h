@@ -138,6 +138,7 @@ enum class ShouldGrandfatherStatistics : bool;
 enum class StorageAccessStatus : uint8_t;
 enum class WebsiteDataFetchOption : uint8_t;
 enum class WebsiteDataType : uint32_t;
+struct AdBlockState;
 struct BackgroundFetchState;
 struct NetworkProcessConnectionParameters;
 struct NetworkProcessCreationParameters;
@@ -381,7 +382,7 @@ public:
     void refreshAdBlockCatalogLists(PAL::SessionID);
     void addAdBlockAllowlistHost(PAL::SessionID, String&&);
     void removeAdBlockAllowlistHost(PAL::SessionID, String&&);
-    void adBlockState(PAL::SessionID, CompletionHandler<void(String)>&&);
+    void getAdBlockState(PAL::SessionID, CompletionHandler<void(std::optional<AdBlockState>&&)>&&);
     void adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&&);
 #endif
 

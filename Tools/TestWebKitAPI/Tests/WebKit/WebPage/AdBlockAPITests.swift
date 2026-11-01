@@ -34,6 +34,7 @@
 import Testing
 @_spi(Testing) import WebKit
 private import TestWebKitAPILibrary
+private import WebKit_Private._WKAdBlock
 private import WebKit_Private._WKWebsiteDataStoreConfiguration
 private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
@@ -46,17 +47,17 @@ struct AdBlockAPITests {
     @Test
     func togglingAdBlockBlocksAndUnblocks() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, store in
             var settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
 
-            store._setAdBlockEnabled(false)
+            store.adBlock.setEnabled(false)
             settled = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(settled)
 
-            store._setAdBlockEnabled(true)
+            store.adBlock.setEnabled(true)
             settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
         }
@@ -67,20 +68,20 @@ struct AdBlockAPITests {
     @Test
     func allowlistExemptsSiteFromBlocking() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, store in
             var settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
 
             // The allowlist keys on the site being visited (the page is on
             // example.com), so the third-party ad on it is let through…
-            store._addAdBlockAllowlistHost("example.com")
+            store.adBlock.addAllowlistHost("example.com")
             settled = try await AdBlockTest.pollUntil { !(try await AdBlockTest.adSubresourceBlocked(page)) }
             #expect(settled)
 
             // …and blocked again once the site is removed.
-            store._removeAdBlockAllowlistHost("example.com")
+            store.adBlock.removeAllowlistHost("example.com")
             settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
         }
@@ -89,8 +90,8 @@ struct AdBlockAPITests {
     @Test
     func allowlistingRequestHostDoesNotExemptItOnOtherSites() async throws {
         try await AdBlockTest.withPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
         } body: { page, store in
             let settled = try await AdBlockTest.pollUntil { try await AdBlockTest.adSubresourceBlocked(page) }
             #expect(settled)
@@ -99,8 +100,8 @@ struct AdBlockAPITests {
             // ads.example.com pages, not a pass for its requests everywhere. The
             // state read is ordered after the add, so the gate is in place before
             // the probe runs.
-            store._addAdBlockAllowlistHost("ads.example.com")
-            _ = await store._getAdBlockState()
+            store.adBlock.addAllowlistHost("ads.example.com")
+            _ = await store.adBlock.state()
             let stillBlocked = try await AdBlockTest.adSubresourceBlocked(page)
             #expect(stillBlocked)
         }
@@ -121,18 +122,18 @@ struct AdBlockAPITests {
 
         try await server.run { serverConfiguration in
             let store = AdBlockTest.makeDataStore(directory: directory, httpsProxy: serverConfiguration.httpsProxy)
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("||custom.example.com^")
-            store._addAdBlockAllowlistHost("allow.example.com")
-            store._addAdBlockSubscription(with: listURL, expectedHash: "")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("||custom.example.com^")
+            store.adBlock.addAllowlistHost("allow.example.com")
+            store.adBlock.addSubscription(url: listURL, expectedHash: "")
 
             // The async state read is ordered after the config sends, so it both
             // proves the round-trip and flushes the on-disk config before we
             // restart the process.
-            let state = await store._getAdBlockState()
-            try expectConfig(
+            let state = try #require(await store.adBlock.state())
+            expectConfig(
                 state,
-                subscription: listURL.absoluteString,
+                subscription: listURL,
                 customRules: "||custom.example.com^",
                 allowlistHost: "allow.example.com"
             )
@@ -140,10 +141,10 @@ struct AdBlockAPITests {
             // Restart the NetworkProcess; the config must reload from disk.
             store._terminateNetworkProcess()
 
-            let restoredState = await store._getAdBlockState()
-            try expectConfig(
+            let restoredState = try #require(await store.adBlock.state())
+            expectConfig(
                 restoredState,
-                subscription: listURL.absoluteString,
+                subscription: listURL,
                 customRules: "||custom.example.com^",
                 allowlistHost: "allow.example.com"
             )
@@ -167,8 +168,8 @@ struct AdBlockAPITests {
             // Issue every adblock call before any WebPage exists — i.e. before
             // the store's NetworkProcess is launched. The sends must be queued
             // and applied once it starts, not lost.
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(AdBlockTest.blockAdsRule)
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(AdBlockTest.blockAdsRule)
 
             var configuration = WebPage.Configuration()
             configuration.websiteDataStore = store
@@ -185,20 +186,15 @@ struct AdBlockAPITests {
 
 extension AdBlockAPITests {
     fileprivate func expectConfig(
-        _ state: [AnyHashable: Any]?,
-        subscription: String,
+        _ state: WKAdBlockState,
+        subscription: URL,
         customRules: String,
         allowlistHost: String
-    ) throws {
-        let state = try #require(state)
-        #expect((state["enabled"] as? Bool) == true)
-        #expect((state["customRules"] as? String) == customRules)
-
-        let allowlist = try #require(state["allowlist"] as? [String])
-        #expect(allowlist.contains(allowlistHost))
-
-        let subscriptions = try #require(state["subscriptions"] as? [[String: Any]])
-        #expect(subscriptions.contains { ($0["url"] as? String) == subscription })
+    ) {
+        #expect(state.isEnabled)
+        #expect(state.customRules == customRules)
+        #expect(state.allowlist.contains(allowlistHost))
+        #expect(state.subscriptions.contains { $0.url == subscription })
     }
 }
 

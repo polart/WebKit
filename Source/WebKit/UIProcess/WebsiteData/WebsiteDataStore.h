@@ -132,6 +132,7 @@ enum class UnifiedOriginStorageLevel : uint8_t;
 enum class WebsiteDataFetchOption : uint8_t;
 enum class WebsiteDataType : uint32_t;
 
+struct AdBlockState;
 struct ITPThirdPartyData;
 struct NetworkProcessConnectionInfo;
 struct WebPushMessage;
@@ -210,7 +211,7 @@ public:
     void refreshAdBlockCatalogLists();
     void addAdBlockAllowlistHost(const String&);
     void removeAdBlockAllowlistHost(const String&);
-    void adBlockState(CompletionHandler<void(String)>&&);
+    void adBlockState(CompletionHandler<void(std::optional<AdBlockState>&&)>&&);
     void adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&&);
 #endif
     bool LEGACY_NODELETE resourceLoadStatisticsDebugMode() const;

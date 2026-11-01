@@ -30,6 +30,7 @@
 #if ENABLE(ADBLOCK)
 
 #include "AdBlockCatalog.h"
+#include "Shared/AdBlock/AdBlockState.h"
 #include <optional>
 #include <pal/SessionID.h>
 #include <wtf/CompletionHandler.h>
@@ -51,14 +52,6 @@ public:
     static Ref<AdBlockListStore> create(NetworkProcess&, PAL::SessionID, const String& directory);
     ~AdBlockListStore();
 
-    // A subscription's persisted state, as read back by the embedder API.
-    struct SubscriptionInfo {
-        String url;
-        bool enabled { true };
-        String title;
-        double lastFetched { 0 }; // WallTime seconds since epoch; 0 == never fetched.
-    };
-
     // Reads persisted config, pushes the allowlist + master enable state to the
     // manager, and restores the engine: warm `.dat` fast path, else re-parse the
     // stored list texts.
@@ -69,11 +62,8 @@ public:
     void setEnabled(bool);
     bool enabled() const { return m_enabled; }
 
-    // A JSON snapshot of the whole config for the embedder API read-back
-    // (subscriptions, allowlist, custom rules, enable state), so a re-instantiated
-    // data store can read persisted state straight from the loaded store without a
-    // new serializable IPC type.
-    String stateJSON() const;
+    // A snapshot of the whole config for the embedder API read-back.
+    AdBlockState state() const;
 
     // Downloads the list over HTTPS, verifies it against the pinned hash (if any),
     // stores its text, and rebuilds. completion(false) on any download/verify
@@ -93,7 +83,7 @@ public:
     void setSubscriptionEnabled(const URL&, bool);
     void refreshSubscription(const URL&, CompletionHandler<void(bool)>&& = [](bool) { });
     void refreshAllSubscriptions();
-    Vector<SubscriptionInfo> subscriptions() const;
+    Vector<AdBlockSubscriptionState> subscriptions() const;
 
     // Custom user rules — one ABP-syntax blob compiled alongside the lists.
     void setCustomRules(const String&);
@@ -121,26 +111,13 @@ public:
     // compiled with their catalog-declared permission mask; user-added
     // subscriptions stay at the most-restrictive 0.
 
-    // A catalog list as reported to the embedder API.
-    struct CatalogListInfo {
-        String uuid;
-        String title;
-        String description;
-        String supportURL;
-        Vector<String> languages;
-        bool hidden { false };
-        bool enabled { false };
-        bool defaultEnabled { false };
-        double lastFetched { 0 }; // WallTime seconds since epoch; 0 == never fetched.
-    };
-
     // Installs the catalog document, re-resolves which lists should be enabled
     // (catalog defaults, one-time locale preselection, and any remembered user
     // choice), starts a download for every enabled list whose text is missing,
     // and rebuilds. Safe to call on every launch with a bundled snapshot and
     // again when a fresher catalog arrives.
     void setCatalog(const String& catalogJSON);
-    Vector<CatalogListInfo> catalogLists() const;
+    Vector<AdBlockCatalogListState> catalogLists() const;
     // Overrides the catalog default for one list and remembers that the user
     // chose, so a later catalog update will not undo it. Hidden lists have no UI
     // toggle and ignore this.

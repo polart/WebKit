@@ -39,6 +39,7 @@
 #include "NetworkProcessConnectionInfo.h"
 #include "NetworkProcessMessages.h"
 #include "PageLoadState.h"
+#include "Shared/AdBlock/AdBlockState.h"
 #include "ShouldGrandfatherStatistics.h"
 #include "StorageAccessStatus.h"
 #include "TimeBasedEvictionMode.h"
@@ -2100,9 +2101,9 @@ void WebsiteDataStore::removeAdBlockAllowlistHost(const String& host)
     protect(networkProcess())->send(Messages::NetworkProcess::RemoveAdBlockAllowlistHost(m_sessionID, host), 0);
 }
 
-void WebsiteDataStore::adBlockState(CompletionHandler<void(String)>&& completionHandler)
+void WebsiteDataStore::adBlockState(CompletionHandler<void(std::optional<AdBlockState>&&)>&& completionHandler)
 {
-    protect(networkProcess())->sendWithAsyncReply(Messages::NetworkProcess::AdBlockState(m_sessionID), WTF::move(completionHandler));
+    protect(networkProcess())->sendWithAsyncReply(Messages::NetworkProcess::GetAdBlockState(m_sessionID), WTF::move(completionHandler));
 }
 
 void WebsiteDataStore::adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&& completionHandler)

@@ -1569,13 +1569,13 @@ void NetworkProcess::removeAdBlockAllowlistHost(PAL::SessionID sessionID, String
     }
 }
 
-void NetworkProcess::adBlockState(PAL::SessionID sessionID, CompletionHandler<void(String)>&& completionHandler)
+void NetworkProcess::getAdBlockState(PAL::SessionID sessionID, CompletionHandler<void(std::optional<AdBlockState>&&)>&& completionHandler)
 {
     if (CheckedPtr session = networkSession(sessionID)) {
         if (RefPtr store = session->ensureAdBlockListStore())
-            return completionHandler(store->stateJSON());
+            return completionHandler(store->state());
     }
-    completionHandler({ });
+    completionHandler(std::nullopt);
 }
 
 void NetworkProcess::adBlockEngineQueryCount(CompletionHandler<void(uint64_t)>&& completionHandler)

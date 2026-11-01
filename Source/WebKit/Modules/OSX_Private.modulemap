@@ -1619,6 +1619,11 @@ framework module WebKit_Private [system] {
     export *
   }
 
+  explicit module _WKAdBlockForTesting {
+    header "_WKAdBlockForTesting.h"
+    export *
+  }
+
   explicit module _WKAppHighlight {
     header "_WKAppHighlight.h"
     export *

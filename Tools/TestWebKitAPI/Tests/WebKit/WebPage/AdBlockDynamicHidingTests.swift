@@ -58,8 +58,8 @@
 //
 // `tokensQueriedOnce` observes the WebProcess-side per-document de-duplication
 // through a process-global engine-query counter exposed for tests
-// (`-_getAdBlockEngineQueryCountWithCompletionHandler:`). It measures the counter
-// *delta* across a controlled burst of same-class insertions inside one settled
+// (`-[_WKAdBlockController _getEngineQueryCountForTestingWithCompletionHandler:]`).
+// It measures the counter *delta* across a controlled burst of same-class insertions inside one settled
 // document, so it depends on the same per-test engine isolation every other
 // adblock suite already relies on (each isolated persistent store drives its own
 // process-global engine); no cross-test traffic falls inside the measured window.
@@ -69,8 +69,9 @@
 import Testing
 @_spi(Testing) import WebKit
 private import TestWebKitAPILibrary
+private import WebKit_Private._WKAdBlock
+private import WebKit_Private._WKAdBlockForTesting
 private import WebKit_Private._WKWebsiteDataStoreConfiguration
-private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
 import struct Foundation.URL
 
@@ -85,8 +86,8 @@ struct AdBlockDynamicHidingTests {
         // exercises the MutationObserver `childList` path rather than the load-time
         // scan.
         try await withDynamicPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ##.probe
                 ##.late-ad
@@ -119,8 +120,8 @@ struct AdBlockDynamicHidingTests {
         // element by id proves the id token is reported and matched, not just class
         // tokens.
         try await withDynamicPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ##.probe
                 ###customAd
@@ -148,8 +149,8 @@ struct AdBlockDynamicHidingTests {
         // document: nothing else queries the engine in that window (no navigation, no
         // subresource loads), so the delta isolates the burst's single query.
         try await withDynamicPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ##.probe
                 ##.burst
@@ -160,7 +161,7 @@ struct AdBlockDynamicHidingTests {
 
             // The document is settled (the probe round-trip completed) — snapshot the
             // engine-query counter, then insert the burst.
-            let before = await store._getAdBlockEngineQueryCount()
+            let before = await store.adBlock._engineQueryCountForTesting()
             try await insertBurst(page, className: "burst", firstID: "burst0", count: 100)
 
             // Wait for the burst's selector to land so its query has definitely been
@@ -170,7 +171,7 @@ struct AdBlockDynamicHidingTests {
             }
             #expect(hidden)
 
-            let after = await store._getAdBlockEngineQueryCount()
+            let after = await store.adBlock._engineQueryCountForTesting()
             #expect(after - before == 1)
         }
     }
@@ -188,8 +189,8 @@ struct AdBlockDynamicHidingTests {
         // reports a token twice, so the ad is hidden only if the WebProcess holds the
         // throttled query and re-sends it once the window resets.
         try await withDynamicPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ##.probe
                 ##.throttled-ad
@@ -234,8 +235,8 @@ struct AdBlockDynamicHidingTests {
         // pins the round-trip: once the control is hidden, the reply for that batch has
         // been applied, so the excepted element's (visible) fate is decided.
         try await withDynamicPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ##.probe
                 ##.hideme
@@ -271,8 +272,8 @@ struct AdBlockDynamicHidingTests {
         // dynamically inserted generic element is hidden — while the same rules hide on
         // a non-generichide host, proving the engine and rules are otherwise live.
         try await withDynamicPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ##.probe
                 ##.generic-ad

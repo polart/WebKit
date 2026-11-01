@@ -1073,6 +1073,8 @@
 		379A873A18BBFE0F00588AF2 /* _WKElementAction.h in Headers */ = {isa = PBXBuildFile; fileRef = 379A873818BBFE0F00588AF2 /* _WKElementAction.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		379A873C18BBFF0700588AF2 /* _WKElementActionInternal.h in Headers */ = {isa = PBXBuildFile; fileRef = 379A873B18BBFF0700588AF2 /* _WKElementActionInternal.h */; };
 		37A5E01418BBF93F000A081E /* _WKActivatedElementInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 37A5E01218BBF937000A081E /* _WKActivatedElementInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		ADB10C00ADB10C0000000005 /* _WKAdBlock.h in Headers */ = {isa = PBXBuildFile; fileRef = ADB10C00ADB10C0000000002 /* _WKAdBlock.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		ADB10C00ADB10C0000000006 /* _WKAdBlockForTesting.h in Headers */ = {isa = PBXBuildFile; fileRef = ADB10C00ADB10C0000000003 /* _WKAdBlockForTesting.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		37A64E5518F38E3C00EB30F1 /* _WKInputDelegate.h in Headers */ = {isa = PBXBuildFile; fileRef = 37A64E5418F38E3C00EB30F1 /* _WKInputDelegate.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		37A64E5718F38F4600EB30F1 /* _WKFormInputSession.h in Headers */ = {isa = PBXBuildFile; fileRef = 37A64E5618F38F4600EB30F1 /* _WKFormInputSession.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		37A709A71E3EA0FD00CA5969 /* WKDataDetectorTypes.h in Headers */ = {isa = PBXBuildFile; fileRef = 37A709A61E3EA0FD00CA5969 /* WKDataDetectorTypes.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -5568,6 +5570,9 @@
 		379A873B18BBFF0700588AF2 /* _WKElementActionInternal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = _WKElementActionInternal.h; sourceTree = "<group>"; };
 		37A5E01118BBF937000A081E /* _WKActivatedElementInfo.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = _WKActivatedElementInfo.mm; sourceTree = "<group>"; };
 		37A5E01218BBF937000A081E /* _WKActivatedElementInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = _WKActivatedElementInfo.h; sourceTree = "<group>"; };
+		ADB10C00ADB10C0000000002 /* _WKAdBlock.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = _WKAdBlock.h; sourceTree = "<group>"; };
+		ADB10C00ADB10C0000000004 /* _WKAdBlock.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = _WKAdBlock.mm; sourceTree = "<group>"; };
+		ADB10C00ADB10C0000000003 /* _WKAdBlockForTesting.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = _WKAdBlockForTesting.h; sourceTree = "<group>"; };
 		37A64E5418F38E3C00EB30F1 /* _WKInputDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = _WKInputDelegate.h; sourceTree = "<group>"; };
 		37A64E5618F38F4600EB30F1 /* _WKFormInputSession.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = _WKFormInputSession.h; sourceTree = "<group>"; };
 		37A709A61E3EA0FD00CA5969 /* WKDataDetectorTypes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WKDataDetectorTypes.h; sourceTree = "<group>"; };
@@ -12982,6 +12987,9 @@
 				37A5E01218BBF937000A081E /* _WKActivatedElementInfo.h */,
 				37A5E01118BBF937000A081E /* _WKActivatedElementInfo.mm */,
 				379A873518BBFA4300588AF2 /* _WKActivatedElementInfoInternal.h */,
+				ADB10C00ADB10C0000000002 /* _WKAdBlock.h */,
+				ADB10C00ADB10C0000000004 /* _WKAdBlock.mm */,
+				ADB10C00ADB10C0000000003 /* _WKAdBlockForTesting.h */,
 				449316A125DC7DC300AA66DE /* _WKAppHighlight.h */,
 				449316A225DC7DC300AA66DE /* _WKAppHighlight.mm */,
 				4476EF0825BFC8B7004A0587 /* _WKAppHighlightDelegate.h */,
@@ -18138,6 +18146,8 @@
 				1A6280C71919950C006AD9F9 /* WebKitPrivate.h in Headers */,
 				37A5E01418BBF93F000A081E /* _WKActivatedElementInfo.h in Headers */,
 				379A873618BBFA4300588AF2 /* _WKActivatedElementInfoInternal.h in Headers */,
+				ADB10C00ADB10C0000000005 /* _WKAdBlock.h in Headers */,
+				ADB10C00ADB10C0000000006 /* _WKAdBlockForTesting.h in Headers */,
 				449316A325DC7DC400AA66DE /* _WKAppHighlight.h in Headers */,
 				4476EF0925BFC8B7004A0587 /* _WKAppHighlightDelegate.h in Headers */,
 				449316A625DC9D0000AA66DE /* _WKAppHighlightInternal.h in Headers */,

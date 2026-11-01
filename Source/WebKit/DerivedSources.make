@@ -688,6 +688,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Platform/IPC/StreamServerConnection.serialization.in \
 	Platform/IPC/TransferString.serialization.in \
 	Platform/cocoa/MediaPlaybackTargetContextSerialized.serialization.in \
+	Shared/AdBlock/AdBlockState.serialization.in \
 	Shared/AuxiliaryProcessCreationParameters.serialization.in \
 	Shared/JavaScriptEvaluationResult.serialization.in \
 	Shared/API/APIArray.serialization.in \

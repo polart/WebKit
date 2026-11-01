@@ -71,8 +71,8 @@
 import Testing
 @_spi(Testing) import WebKit
 private import TestWebKitAPILibrary
+private import WebKit_Private._WKAdBlock
 private import WebKit_Private._WKWebsiteDataStoreConfiguration
-private import WebKit_Private.WKWebsiteDataStorePrivate
 import struct Swift.String
 import struct Foundation.URL
 
@@ -83,8 +83,8 @@ struct AdBlockCosmeticTests {
     @Test
     func hidesMatchingSelector() async throws {
         try await withCosmeticPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("example.com##.ad")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("example.com##.ad")
         } body: { page, _ in
             // The engine build is async; poll (re-navigating) until the selector is
             // delivered and the element is hidden.
@@ -111,8 +111,8 @@ struct AdBlockCosmeticTests {
         // parse-time global (not just the eventual computed style) proves there is no
         // flash of the un-hidden ad.
         try await withCosmeticPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("example.com##.ad")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("example.com##.ad")
         } body: { page, _ in
             let hiddenAtParseTime = try await AdBlockTest.pollUntil {
                 try await navigate(page, host: "example.com")
@@ -127,8 +127,8 @@ struct AdBlockCosmeticTests {
     @Test
     func siteSpecificScoping() async throws {
         try await withCosmeticPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("example.com##.ad")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("example.com##.ad")
         } body: { page, _ in
             // On the rule's domain the element is hidden…
             let hiddenOnExample = try await AdBlockTest.pollUntil {
@@ -150,8 +150,8 @@ struct AdBlockCosmeticTests {
     @Test
     func exceptionRuleUnhides() async throws {
         try await withCosmeticPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("example.com##.ad")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("example.com##.ad")
         } body: { page, store in
             // First observe the hide so we know the selector is built and delivered…
             let hidden = try await AdBlockTest.pollUntil {
@@ -162,7 +162,7 @@ struct AdBlockCosmeticTests {
 
             // …then add the unhide exception (which removes the selector from the
             // delivered hide set) and observe the element become visible again.
-            store._setAdBlockCustomRules(
+            store.adBlock.setCustomRules(
                 """
                 example.com##.ad
                 example.com#@#.ad
@@ -185,8 +185,8 @@ struct AdBlockCosmeticTests {
         // unmatched) keeps its `.ad` visible — proving cosmetic resources are keyed
         // to each document's own navigation URL.
         try await withCosmeticPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules("cosframe.example.com##.ad")
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules("cosframe.example.com##.ad")
         } body: { page, _ in
             try await navigate(page, host: "example.com")
             // Top document is unmatched, so its `.ad` element is visible.
@@ -209,8 +209,8 @@ struct AdBlockCosmeticTests {
         // site-specific `##.ad`. A `$generichide` exception must drop only the generic
         // selector from the delivered set, leaving the specific one enforced.
         try await withCosmeticPage { store in
-            store._setAdBlockEnabled(true)
-            store._setAdBlockCustomRules(
+            store.adBlock.setEnabled(true)
+            store.adBlock.setCustomRules(
                 """
                 ##div.generic-ad
                 example.com##.ad
@@ -228,7 +228,7 @@ struct AdBlockCosmeticTests {
 
             // Adding the generichide exception un-hides the generic element while the
             // site-specific selector keeps hiding its target.
-            store._setAdBlockCustomRules(
+            store.adBlock.setCustomRules(
                 """
                 ##div.generic-ad
                 example.com##.ad
@@ -250,8 +250,8 @@ struct AdBlockCosmeticTests {
     @Test
     func cosmeticDisabledWhenFlagOff() async throws {
         try await withCosmeticPage { store in
-            store._setAdBlockEnabled(false)
-            store._setAdBlockCustomRules("example.com##.ad")
+            store.adBlock.setEnabled(false)
+            store.adBlock.setCustomRules("example.com##.ad")
         } body: { page, _ in
             // With the master toggle off the engine is never consulted, so no
             // selector is delivered. A single check suffices: "disabled" is a

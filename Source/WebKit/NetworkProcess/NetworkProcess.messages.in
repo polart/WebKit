@@ -334,7 +334,7 @@ messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
     RefreshAdBlockCatalogLists(PAL::SessionID sessionID)
     AddAdBlockAllowlistHost(PAL::SessionID sessionID, String host)
     RemoveAdBlockAllowlistHost(PAL::SessionID sessionID, String host)
-    AdBlockState(PAL::SessionID sessionID) -> (String stateJSON)
+    GetAdBlockState(PAL::SessionID sessionID) -> (struct std::optional<WebKit::AdBlockState> state)
     AdBlockEngineQueryCount() -> (uint64_t count)
 #endif
 }
