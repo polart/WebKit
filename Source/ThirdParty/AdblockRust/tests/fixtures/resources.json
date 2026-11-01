@@ -1,0 +1,66 @@
+[
+    {
+        "name": "safe-self.fn",
+        "aliases": [],
+        "kind": {
+            "mime": "fn/javascript"
+        },
+        "content": "ZnVuY3Rpb24gc2FmZVNlbGYoKSB7CiAgICByZXR1cm4gZ2xvYmFsVGhpczsKfQ=="
+    },
+    {
+        "name": "set-constant.fn",
+        "aliases": [],
+        "kind": {
+            "mime": "fn/javascript"
+        },
+        "content": "ZnVuY3Rpb24gc2V0Q29uc3RhbnRGbih0cnVzdGVkID0gZmFsc2UsIGNoYWluID0gJycsIHZhbHVlID0gJycpIHsKICAgIHNhZmVTZWxmKClbY2hhaW5dID0gdmFsdWU7Cn0=",
+        "dependencies": [
+            "safe-self.fn"
+        ]
+    },
+    {
+        "name": "set-constant.js",
+        "aliases": [
+            "set.js"
+        ],
+        "kind": {
+            "mime": "application/javascript"
+        },
+        "content": "ZnVuY3Rpb24gc2V0Q29uc3RhbnQoLi4uYXJncykgewogICAgc2V0Q29uc3RhbnRGbihmYWxzZSwgLi4uYXJncyk7Cn0=",
+        "dependencies": [
+            "set-constant.fn"
+        ]
+    },
+    {
+        "name": "trusted-set-cookie.js",
+        "aliases": [],
+        "kind": {
+            "mime": "application/javascript"
+        },
+        "content": "ZnVuY3Rpb24gdHJ1c3RlZFNldENvb2tpZShuYW1lID0gJycsIHZhbHVlID0gJycpIHsKICAgIHNhZmVTZWxmKCkuZG9jdW1lbnQuY29va2llID0gYCR7bmFtZX09JHt2YWx1ZX1gOwp9",
+        "dependencies": [
+            "safe-self.fn"
+        ],
+        "permission": 1
+    },
+    {
+        "name": "noop.js",
+        "aliases": [
+            "google-ima.js"
+        ],
+        "kind": {
+            "mime": "application/javascript"
+        },
+        "content": "KGZ1bmN0aW9uKCkgewp9KSgpOw=="
+    },
+    {
+        "name": "1x1.gif",
+        "aliases": [
+            "1x1-transparent.gif"
+        ],
+        "kind": {
+            "mime": "image/gif"
+        },
+        "content": "R0lGODlhAQABAIAAAP///////yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
+    }
+]
