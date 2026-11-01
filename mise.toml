@@ -1,0 +1,23 @@
+[tasks."build:debug"]
+description = 'Debug build'
+run = 'Tools/Scripts/build-webkit --debug'
+
+[tasks."build:compile-commands"]
+description = 'Debug build with compile_commands.json for clangd'
+run = 'Tools/Scripts/build-webkit --debug --export-compile-commands; Tools/Scripts/generate-compile-commands WebKitBuild/Debug'
+
+[tasks."build:release"]
+description = 'Release build'
+run = 'Tools/Scripts/build-webkit --release'
+
+[tasks.tests]
+description = 'Run AdBlock API tests'
+run = 'Tools/Scripts/run-api-tests --debug "AdBlock*"'
+
+[tasks.pull]
+description = 'Fetch upstream main'
+run = 'git fetch origin main'
+
+[tasks.styles]
+description = 'Check WebKit style'
+run = 'Tools/Scripts/check-webkit-style'
