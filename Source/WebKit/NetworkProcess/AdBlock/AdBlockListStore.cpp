@@ -261,7 +261,7 @@ void AdBlockListStore::load(CompletionHandler<void()>&& completion)
         return;
     }
 
-    Ref networkProcess { m_networkProcess.get() };
+    Ref networkProcess { m_networkProcess };
     Ref manager { networkProcess->adBlockManager() };
     manager->setAllowlistedHosts(HashSet<String> { m_allowlist });
     manager->setEnabled(m_enabled);
@@ -284,7 +284,7 @@ void AdBlockListStore::startDownload(const URL& url, const String& expectedHash,
         return;
     }
 
-    Ref networkProcess { m_networkProcess.get() };
+    Ref networkProcess { m_networkProcess };
     AdBlockListDownloader::create(networkProcess, m_sessionID, url, [protectedThis = Ref { *this }, url, expectedHash, completion = WTF::move(completion)](std::optional<Vector<uint8_t>>&& result) mutable {
         protectedThis->handleDownload(url, expectedHash, WTF::move(result), WTF::move(completion));
     });
@@ -440,7 +440,7 @@ void AdBlockListStore::setAllowlistedHosts(HashSet<String>&& hosts)
 {
     m_allowlist = WTF::move(hosts);
     persistConfig();
-    Ref { m_networkProcess.get() }->adBlockManager().setAllowlistedHosts(HashSet<String> { m_allowlist });
+    Ref { m_networkProcess }->adBlockManager().setAllowlistedHosts(HashSet<String> { m_allowlist });
 }
 
 void AdBlockListStore::addAllowlistedHost(const String& host)
@@ -448,7 +448,7 @@ void AdBlockListStore::addAllowlistedHost(const String& host)
     if (!m_allowlist.add(host).isNewEntry)
         return;
     persistConfig();
-    Ref { m_networkProcess.get() }->adBlockManager().addAllowlistedHost(host);
+    Ref { m_networkProcess }->adBlockManager().addAllowlistedHost(host);
 }
 
 void AdBlockListStore::removeAllowlistedHost(const String& host)
@@ -456,7 +456,7 @@ void AdBlockListStore::removeAllowlistedHost(const String& host)
     if (!m_allowlist.remove(host))
         return;
     persistConfig();
-    Ref { m_networkProcess.get() }->adBlockManager().removeAllowlistedHost(host);
+    Ref { m_networkProcess }->adBlockManager().removeAllowlistedHost(host);
 }
 
 Vector<String> AdBlockListStore::allowlistedHosts() const
@@ -658,7 +658,7 @@ void AdBlockListStore::fetchCatalogSources(String uuid, Vector<URL>&& sources, s
         return;
     }
 
-    Ref networkProcess { m_networkProcess.get() };
+    Ref networkProcess { m_networkProcess };
     AdBlockListDownloader::create(networkProcess, m_sessionID, url, [protectedThis = Ref { *this }, uuid = WTF::move(uuid), sources = WTF::move(sources), index, accumulated = WTF::move(accumulated)](std::optional<Vector<uint8_t>>&& result) mutable {
         if (!result || result->isEmpty() || !looksLikeFilterList(result->span())) {
             // Compiling a list that is missing one of its sources would silently
@@ -743,7 +743,7 @@ void AdBlockListStore::setEnabled(bool enabled)
     // it — a bare `m_enabled == enabled` early-return could otherwise leave the
     // shared gate stale (this store thinks it is enabled while the gate is off).
     // The compiled engine stays warm; only the gate flips.
-    Ref { m_networkProcess.get() }->adBlockManager().setEnabled(enabled);
+    Ref { m_networkProcess }->adBlockManager().setEnabled(enabled);
     RELEASE_LOG(AdBlock, "AdBlockListStore: master enable gate set %{public}s", enabled ? "ON" : "OFF");
 
     // Persist only when this store's own value actually changed.
@@ -812,10 +812,10 @@ void AdBlockListStore::rebuildEngine()
 
     RELEASE_LOG(AdBlock, "AdBlockListStore: rebuilding engine from %zu enabled list(s) (%zu from the catalog)%s", files.size(), catalogListCount, m_customRules.isEmpty() ? "" : " + custom rules");
 
-    Ref manager { Ref { m_networkProcess.get() }->adBlockManager() };
+    Ref manager { Ref { m_networkProcess }->adBlockManager() };
     // Compile-and-swap on the WorkQueue, then re-serialize the `.dat` so the warm
     // cache always matches the last compiled enabled set.
-    manager->setEngineFromListFiles(WTF::move(files), WTF::move(inlineLists), m_resourcesJSON, [manager, cachePath = cachePath()]() mutable {
+    manager->setEngineFromListFiles(WTF::move(files), WTF::move(inlineLists), m_resourcesJSON, [manager, cachePath = cachePath()] mutable {
         manager->saveCacheFile(cachePath, [](bool) { });
     });
 }

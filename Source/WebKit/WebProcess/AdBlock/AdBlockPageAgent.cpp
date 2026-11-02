@@ -399,7 +399,7 @@ void AdBlockPageAgent::queryDynamicTokens(WebFrame& webFrame, FrameDynamicState&
                 return;
             // Drop the reply if the frame navigated away: the state was cleared, or the
             // document that observed these tokens is no longer the frame's document.
-            RefPtr document = weakDocument.get();
+            RefPtr document = weakDocument;
             RefPtr coreFrame = protectedFrame->coreLocalFrame();
             if (!document || !coreFrame || coreFrame->document() != document.get())
                 return;

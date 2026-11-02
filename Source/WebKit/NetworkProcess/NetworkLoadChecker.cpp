@@ -332,7 +332,7 @@ void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurity
     // extension path. A block ends the load the same way a content-extension
     // block does.
     AdBlock::checkNetworkRequest(NetworkProcess::singleton(), m_topOrigin.get(), m_options.destination, m_requestLoadType == LoadType::MainFrame, WTF::move(request), [weakThis = WeakPtr { *this }, client, handler = WTF::move(handler)](ResourceRequest&& request, bool blocked, String cspDirectives, AdBlockCosmeticResources cosmeticResources) mutable {
-        RefPtr protectedThis = weakThis.get();
+        RefPtr protectedThis = weakThis;
         if (!protectedThis) {
             handler(ResourceError { ResourceError::Type::Cancellation });
             return;
@@ -377,7 +377,7 @@ void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurity
             return;
         }
 
-        RefPtr protectedThis = weakThis.get();
+        RefPtr protectedThis = weakThis;
         if (!protectedThis)
             return handler({ ResourceError { ResourceError::Type::Cancellation }});
 
