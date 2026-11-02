@@ -21,3 +21,7 @@ run = 'cargo fmt --check'
 [tasks.check]
 # Full local verification gate (lint, test, release build).
 depends = ['fmt', 'lint', 'test']
+
+[tasks.notices]
+# Writes THIRD_PARTY_NOTICES.txt, the license texts that must ship with the binary.
+run = 'python3 scripts/generate-notices.py'

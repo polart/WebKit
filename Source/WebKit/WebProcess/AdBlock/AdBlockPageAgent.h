@@ -1,4 +1,4 @@
-// Copyright (C) 2026 the WebKit adblock integration authors.
+// Copyright (C) 2026 Artem Polunin.
 // SPDX-License-Identifier: MPL-2.0
 //
 // AdBlockPageAgent is the WebProcess-side, per-WebPage coordinator for cosmetic

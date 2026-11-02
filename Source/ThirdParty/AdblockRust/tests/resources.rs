@@ -1,4 +1,4 @@
-// Copyright (C) 2026 the WebKit adblock integration authors.
+// Copyright (C) 2026 Artem Polunin.
 // SPDX-License-Identifier: MPL-2.0
 //
 // Checks how the engine consumes a resource library in the format the embedder

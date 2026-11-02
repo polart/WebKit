@@ -1,6 +1,7 @@
 #!/bin/sh
 #
-# Copyright (C) 2026 Apple Inc. All rights reserved.
+# Copyright (C) 2026 Artem Polunin.
+# SPDX-License-Identifier: MPL-2.0
 #
 # Builds the adblock FFI crate (Source/ThirdParty/AdblockRust) into
 # libwebkitadblock.a and copies it, plus the cxx-generated C++ headers, into
