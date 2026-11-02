@@ -80,7 +80,7 @@ NetworkSocketChannel::NetworkSocketChannel(NetworkConnectionToWebProcess& connec
                 protectedThis->didClose(0, "Blocked by adblock"_s);
                 return;
             }
-            if (RefPtr socket = protectedThis->m_socket.get())
+            if (RefPtr socket = protectedThis->m_socket)
                 socket->resume();
         });
 #else

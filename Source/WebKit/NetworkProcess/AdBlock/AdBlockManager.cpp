@@ -60,14 +60,14 @@ AdBlockManager::~AdBlockManager() = default;
 
 void AdBlockManager::setEngine(Ref<AdBlockEngine>&& engine)
 {
-    m_queue->dispatch([this, protectedThis = Ref { *this }, engine = WTF::move(engine)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, engine = WTF::move(engine)] mutable {
         m_engine = WTF::move(engine);
     });
 }
 
 void AdBlockManager::setEngineFromRules(Vector<uint8_t>&& rules, CompletionHandler<void()>&& completion)
 {
-    m_queue->dispatch([this, protectedThis = Ref { *this }, rules = WTF::move(rules), completion = WTF::move(completion)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, rules = WTF::move(rules), completion = WTF::move(completion)] mutable {
         m_engine = AdBlockEngine::createFromRules(rules.span());
         RunLoop::mainSingleton().dispatch(WTF::move(completion));
     });
@@ -78,7 +78,7 @@ void AdBlockManager::setEngineFromListFiles(Vector<ListFileInput>&& files, Vecto
     auto isolatedFiles = files.map([](auto& file) {
         return ListFileInput { file.path.isolatedCopy(), file.permissionMask };
     });
-    m_queue->dispatch([this, protectedThis = Ref { *this }, files = WTF::move(isolatedFiles), inlineLists = WTF::move(inlineLists), resourcesJSON = resourcesJSON.isolatedCopy(), completion = WTF::move(completion)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, files = WTF::move(isolatedFiles), inlineLists = WTF::move(inlineLists), resourcesJSON = resourcesJSON.isolatedCopy(), completion = WTF::move(completion)] mutable {
         Vector<AdBlockEngine::ListInput> lists;
         lists.reserveInitialCapacity(files.size() + inlineLists.size());
         // Read each list's text here on the work queue — never the main run loop
@@ -150,9 +150,9 @@ bool AdBlockManager::loadCacheOnQueue(const String& path)
 
 void AdBlockManager::loadCacheFile(const String& path, CompletionHandler<void(bool)>&& completion)
 {
-    m_queue->dispatch([this, protectedThis = Ref { *this }, path = path.isolatedCopy(), completion = WTF::move(completion)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, path = path.isolatedCopy(), completion = WTF::move(completion)] mutable {
         bool didLoad = loadCacheOnQueue(path);
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), didLoad]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), didLoad] mutable {
             completion(didLoad);
         });
     });
@@ -160,7 +160,7 @@ void AdBlockManager::loadCacheFile(const String& path, CompletionHandler<void(bo
 
 void AdBlockManager::saveCacheFile(const String& path, CompletionHandler<void(bool)>&& completion)
 {
-    m_queue->dispatch([this, protectedThis = Ref { *this }, path = path.isolatedCopy(), completion = WTF::move(completion)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, path = path.isolatedCopy(), completion = WTF::move(completion)] mutable {
         bool didSave = false;
         if (RefPtr engine = m_engine) {
             auto encoded = encodeCache(engine->serialize().span());
@@ -168,7 +168,7 @@ void AdBlockManager::saveCacheFile(const String& path, CompletionHandler<void(bo
             if (!didSave)
                 RELEASE_LOG_ERROR(AdBlock, "AdBlockManager: failed to write cache file");
         }
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), didSave]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), didSave] mutable {
             completion(didSave);
         });
     });
@@ -206,20 +206,20 @@ bool AdBlockManager::isAllowlistedHost(const String& host) const
 void AdBlockManager::checkRequest(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(AdBlockEngine::CheckResult)>&& completion)
 {
     if (!isEnabled() || isAllowlistedHost(sourceHostname)) {
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)] mutable {
             completion(AdBlockEngine::CheckResult { });
         });
         return;
     }
 
-    m_queue->dispatch([this, protectedThis = Ref { *this }, url = url.isolatedCopy(), hostname = hostname.isolatedCopy(), sourceHostname = sourceHostname.isolatedCopy(), requestType = requestType.isolatedCopy(), isThirdParty, completion = WTF::move(completion)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, url = url.isolatedCopy(), hostname = hostname.isolatedCopy(), sourceHostname = sourceHostname.isolatedCopy(), requestType = requestType.isolatedCopy(), isThirdParty, completion = WTF::move(completion)] mutable {
         AdBlockEngine::CheckResult result;
         if (RefPtr engine = m_engine) {
             m_engineQueryCount.fetch_add(1, std::memory_order_relaxed);
             result = engine->checkRequest(url, hostname, sourceHostname, requestType, isThirdParty);
             result.redirect = result.redirect.isolatedCopy();
         }
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), result = WTF::move(result)]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), result = WTF::move(result)] mutable {
             completion(WTF::move(result));
         });
     });
@@ -228,13 +228,13 @@ void AdBlockManager::checkRequest(const String& url, const String& hostname, con
 void AdBlockManager::cspAndCosmeticResources(const String& url, const String& hostname, const String& sourceHostname, const String& requestType, bool isThirdParty, CompletionHandler<void(String, AdBlockCosmeticResources)>&& completion)
 {
     if (!isEnabled() || isAllowlistedHost(sourceHostname)) {
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)] mutable {
             completion(String { }, AdBlockCosmeticResources { });
         });
         return;
     }
 
-    m_queue->dispatch([this, protectedThis = Ref { *this }, url = url.isolatedCopy(), hostname = hostname.isolatedCopy(), sourceHostname = sourceHostname.isolatedCopy(), requestType = requestType.isolatedCopy(), isThirdParty, completion = WTF::move(completion)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, url = url.isolatedCopy(), hostname = hostname.isolatedCopy(), sourceHostname = sourceHostname.isolatedCopy(), requestType = requestType.isolatedCopy(), isThirdParty, completion = WTF::move(completion)] mutable {
         String directives;
         AdBlockCosmeticResources resources;
         if (RefPtr engine = m_engine) {
@@ -250,7 +250,7 @@ void AdBlockManager::cspAndCosmeticResources(const String& url, const String& ho
             // above), run dynamic hiding unless the page opted out via generichide.
             resources.dynamicHidingEnabled = !resources.generichide;
         }
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), directives = WTF::move(directives), resources = WTF::move(resources)]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), directives = WTF::move(directives), resources = WTF::move(resources)] mutable {
             completion(WTF::move(directives), WTF::move(resources));
         });
     });
@@ -259,19 +259,19 @@ void AdBlockManager::cspAndCosmeticResources(const String& url, const String& ho
 void AdBlockManager::hiddenClassIdSelectors(Vector<String>&& classes, Vector<String>&& ids, Vector<String>&& exceptions, const String& siteHostname, CompletionHandler<void(Vector<String>)>&& completion)
 {
     if (!isEnabled() || isAllowlistedHost(siteHostname)) {
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion)] mutable {
             completion(Vector<String> { });
         });
         return;
     }
 
-    m_queue->dispatch([this, protectedThis = Ref { *this }, classes = isolatedCopyStrings(classes), ids = isolatedCopyStrings(ids), exceptions = isolatedCopyStrings(exceptions), completion = WTF::move(completion)]() mutable {
+    m_queue->dispatch([this, protectedThis = Ref { *this }, classes = isolatedCopyStrings(classes), ids = isolatedCopyStrings(ids), exceptions = isolatedCopyStrings(exceptions), completion = WTF::move(completion)] mutable {
         Vector<String> selectors;
         if (RefPtr engine = m_engine) {
             m_engineQueryCount.fetch_add(1, std::memory_order_relaxed);
             selectors = isolatedCopyStrings(engine->hiddenClassIdSelectors(classes, ids, exceptions));
         }
-        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), selectors = WTF::move(selectors)]() mutable {
+        RunLoop::mainSingleton().dispatch([completion = WTF::move(completion), selectors = WTF::move(selectors)] mutable {
             completion(WTF::move(selectors));
         });
     });

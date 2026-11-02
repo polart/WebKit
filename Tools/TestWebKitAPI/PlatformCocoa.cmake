@@ -856,6 +856,14 @@ list(APPEND TestWebKit_SOURCES
     Tests/WebKit/WKWebView/WKWebViewHitTestTests.swift
     Tests/WebKit/WKWebView/WKWebViewSwiftOverlayTests.swift
 
+    Tests/WebKit/WebPage/AdBlockAPITests.swift
+    Tests/WebKit/WebPage/AdBlockCSPTests.swift
+    Tests/WebKit/WebPage/AdBlockCosmeticTests.swift
+    Tests/WebKit/WebPage/AdBlockDynamicHidingTests.swift
+    Tests/WebKit/WebPage/AdBlockListManagementTests.swift
+    Tests/WebKit/WebPage/AdBlockNetworkBlockingTests.swift
+    Tests/WebKit/WebPage/AdBlockScriptletTests.swift
+    Tests/WebKit/WebPage/AdBlockTestSupport.swift
     Tests/WebKit/WebPage/ControlledByExternalAgent.swift
     Tests/WebKit/WebPage/EditingFontSizeTests.swift
     Tests/WebKit/WebPage/JSHandleTests.swift

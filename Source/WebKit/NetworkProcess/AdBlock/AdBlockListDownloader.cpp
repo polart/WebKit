@@ -122,7 +122,7 @@ void AdBlockListDownloader::didReceiveChallenge(AuthenticationChallenge&& challe
     // and every download fails. Route it to the AuthenticationManager exactly as
     // PingLoad/BackgroundFetchLoad do (no page context: empty proxy id, no origin).
     if (challenge.protectionSpace().authenticationScheme() == ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested) {
-        Ref networkProcess { m_networkProcess.get() };
+        Ref networkProcess { m_networkProcess };
         Ref { networkProcess->authenticationManager() }->didReceiveAuthenticationChallenge(m_sessionID, { }, nullptr, challenge, negotiatedLegacyTLS, WTF::move(completionHandler));
         return;
     }
