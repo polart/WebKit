@@ -1,4 +1,4 @@
-// Copyright (C) 2026 the WebKit adblock integration authors.
+// Copyright (C) 2026 Artem Polunin.
 // SPDX-License-Identifier: MPL-2.0
 //
 // Parses the filter-list catalog published by brave/adblock-resources

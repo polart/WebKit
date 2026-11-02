@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+# Copyright (C) 2026 Artem Polunin.
+# SPDX-License-Identifier: MPL-2.0
+#
+# Writes the license texts of every Rust crate that is compiled into
+# libwebkitadblock.a (and from there into WebKit.framework). Anything that ships
+# the framework must ship this file with it. Build-only crates (build scripts,
+# proc macros, dev-dependencies) are left out because none of their code ships.
+#
+# Usage, from the crate root: scripts/generate-notices.py [OUTPUT]
+# OUTPUT defaults to THIRD_PARTY_NOTICES.txt (git-ignored).
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+TARGET = "aarch64-apple-darwin"
+DEFAULT_OUTPUT = "THIRD_PARTY_NOTICES.txt"
+LICENSE_PREFIXES = ("license", "licence", "copying", "notice", "unlicense")
+# Standard texts for crates whose package ships no license file.
+STANDARD_TEXTS = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "LICENSES")
+
+
+def shipped_packages():
+    out = subprocess.run(
+        ["cargo", "tree", "--edges", "normal,no-proc-macro", "--target", TARGET,
+         "--prefix", "none", "--format", "{p}"],
+        check=True, capture_output=True, text=True).stdout
+    packages = set()
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            packages.add((parts[0], parts[1].lstrip("v")))
+    return packages
+
+
+def package_metadata():
+    out = subprocess.run(["cargo", "metadata", "--format-version", "1"],
+                         check=True, capture_output=True, text=True).stdout
+    return {(p["name"], p["version"]): p for p in json.loads(out)["packages"]}
+
+
+def license_files(directory):
+    names = sorted(n for n in os.listdir(directory) if n.lower().startswith(LICENSE_PREFIXES))
+    return [os.path.join(directory, n) for n in names if os.path.isfile(os.path.join(directory, n))]
+
+
+# Content inside a crate whose license differs from the crate's own and is not
+# in its license files.
+EXTRA_NOTES = {
+    "psl": "Includes data from the Public Suffix List (https://publicsuffix.org),\n"
+           "which is under the Mozilla Public License 2.0.\n",
+}
+
+# A crate's own copyright lines sit at the top of its license file; the rest is
+# the license text, which many crates share. Lines with template brackets
+# ("Copyright [yyyy] [name of copyright owner]") belong to the text.
+COPYRIGHT_HEADER_LINES = 15
+
+
+def split_copyright(text):
+    lines = text.strip().splitlines()
+    holders = []
+    body = []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        is_holder = (index < COPYRIGHT_HEADER_LINES and "[" not in stripped
+                     and re.match(r"(copyright\b|\(c\)|©)", stripped, re.IGNORECASE))
+        (holders if is_holder else body).append(stripped if is_holder else line)
+    return holders, "\n".join(body).strip() + "\n"
+
+
+def normalized(text):
+    return " ".join(text.split())
+
+
+def main():
+    output_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUTPUT
+    metadata = package_metadata()
+    root = metadata.get(("webkit-adblock", "0.1.0"))
+    entries = []
+    texts = []  # unique license texts, in first-seen order
+    text_ids = {}
+    missing = []
+    for name, version in sorted(shipped_packages()):
+        package = metadata[(name, version)]
+        if package is root:
+            continue
+        directory = os.path.dirname(package["manifest_path"])
+        files = license_files(directory)
+        holders = []
+        standard = os.path.join(STANDARD_TEXTS, f"{package.get('license')}.txt")
+        if not files and os.path.isfile(standard):
+            files = [standard]
+            holders = [", ".join(package.get("authors") or [name])]
+        if not files:
+            missing.append(f"{name} {version}")
+
+        references = []
+        for path in files:
+            file_holders, body = split_copyright(open(path, encoding="utf-8", errors="replace").read())
+            holders += [holder for holder in file_holders if holder not in holders]
+            key = normalized(body)
+            if key not in text_ids:
+                texts.append(body)
+                text_ids[key] = len(texts)
+            if text_ids[key] not in references:
+                references.append(text_ids[key])
+
+        entry = f"{name} {version}\nLicense: {package.get('license') or 'see license text'}\n"
+        if package.get("repository"):
+            entry += f"Source: {package['repository']}\n"
+        entry += "".join(f"{holder}\n" if holder.lower().startswith(("copyright", "(c)", "©"))
+                         else f"Copyright: {holder}\n" for holder in holders)
+        entry += "License text: " + ", ".join(f"[{reference}]" for reference in references) + "\n"
+        entry += EXTRA_NOTES.get(name, "")
+        entries.append(entry)
+
+    with open(output_path, "w", encoding="utf-8") as output:
+        output.write("Third-party Rust crates compiled into libwebkitadblock.a\n")
+        output.write("Generated by scripts/generate-notices.py; do not edit by hand.\n\n")
+        output.write("Each crate lists its copyright holders and refers to its license texts by\n")
+        output.write("number; the texts follow the list. A crate offered under a choice of licenses\n")
+        output.write("(\"MIT OR Apache-2.0\") refers to each text its package includes.\n\n")
+        output.write("\n".join(entries))
+        for number, text in enumerate(texts, start=1):
+            output.write("\n" + "=" * 79 + f"\n\nLicense text [{number}]\n\n" + text)
+
+    if missing:
+        sys.exit("No license file found for: " + ", ".join(missing))
+    print(f"Wrote {output_path} ({len(entries)} crates, {len(texts)} distinct license texts)")
+
+
+if __name__ == "__main__":
+    main()
