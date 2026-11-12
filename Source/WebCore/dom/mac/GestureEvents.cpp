@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Artem Polunin.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,10 +24,88 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// The internal SDK build includes Apple's GestureEvent.cpp from WebKitAdditions
+// here. This fork implements it in the open; see GestureEvent.h.
+
 #include "config.h"
 
 #if ENABLE(MAC_GESTURE_EVENTS)
 
-#include <WebKitAdditions/GestureEvent.cpp>
+#include "GestureEvent.h"
 
-#endif
+#include "PlatformGestureEventMac.h"
+#include <wtf/TZoneMallocInlines.h>
+
+namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GestureEvent);
+
+inline GestureEvent::GestureEvent()
+    : MouseRelatedEvent(EventInterfaceType::GestureEvent)
+{
+}
+
+inline GestureEvent::GestureEvent(const AtomString& type, const PlatformGestureEvent& event, RefPtr<WindowProxy>&& view, double scale, double rotation)
+    : MouseRelatedEvent(
+        EventInterfaceType::GestureEvent,
+        type,
+        CanBubble::Yes,
+        IsCancelable::Yes,
+        IsComposed::Yes,
+        event.timestamp(),
+        WTF::move(view),
+        0,
+        event.globalPosition(),
+        event.pos(),
+        0,
+        0,
+        event.modifiers(),
+        IsSimulated::No,
+        IsTrusted::Yes)
+    , m_scale(scale)
+    , m_rotation(rotation)
+{
+}
+
+Ref<GestureEvent> GestureEvent::create(const AtomString& type, const PlatformGestureEvent& event, RefPtr<WindowProxy>&& view, double scale, double rotation)
+{
+    return adoptRef(*new GestureEvent(type, event, WTF::move(view), scale, rotation));
+}
+
+Ref<GestureEvent> GestureEvent::createForBindings()
+{
+    return adoptRef(*new GestureEvent);
+}
+
+void GestureEvent::initGestureEvent(const AtomString& type, bool canBubble, bool cancelable, RefPtr<WindowProxy>&& view, int detail,
+    double screenX, double screenY, double clientX, double clientY,
+    bool ctrlKey, bool altKey, bool shiftKey, bool metaKey,
+    RefPtr<EventTarget>&&, double scale, double rotation)
+{
+    if (isBeingDispatched())
+        return;
+
+    if (!std::isfinite(clientX))
+        clientX = 0;
+    if (!std::isfinite(clientY))
+        clientY = 0;
+    if (!std::isfinite(screenX))
+        screenX = 0;
+    if (!std::isfinite(screenY))
+        screenY = 0;
+
+    initUIEvent(type, canBubble, cancelable, WTF::move(view), detail);
+
+    setScreenLocation({ screenX, screenY });
+    setModifierKeys(ctrlKey, altKey, shiftKey, metaKey);
+    initCoordinates({ clientX, clientY });
+
+    // The target argument is accepted for compatibility with Safari's signature
+    // and ignored: dispatchEvent() sets the target.
+    m_scale = scale;
+    m_rotation = rotation;
+}
+
+} // namespace WebCore
+
+#endif // ENABLE(MAC_GESTURE_EVENTS)

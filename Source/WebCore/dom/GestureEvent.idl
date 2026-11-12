@@ -1,0 +1,29 @@
+// Copyright (C) 2026 Artem Polunin.
+// SPDX-License-Identifier: MPL-2.0
+//
+// Safari's non-standard GestureEvent, as exposed on macOS:
+// https://developer.apple.com/documentation/webkitjs/gestureevent
+
+[
+    Conditional=MAC_GESTURE_EVENTS,
+    Exposed=Window
+] interface GestureEvent : UIEvent {
+    readonly attribute unrestricted double screenX;
+    readonly attribute unrestricted double screenY;
+    readonly attribute unrestricted double clientX;
+    readonly attribute unrestricted double clientY;
+
+    readonly attribute boolean ctrlKey;
+    readonly attribute boolean shiftKey;
+    readonly attribute boolean altKey;
+    readonly attribute boolean metaKey;
+
+    readonly attribute unrestricted double scale;
+    readonly attribute unrestricted double rotation;
+
+    undefined initGestureEvent([AtomString] DOMString type, optional boolean canBubble = false, optional boolean cancelable = false,
+        optional WindowProxy? view = null, optional long detail = 0,
+        optional unrestricted double screenX = 0, optional unrestricted double screenY = 0, optional unrestricted double clientX = 0, optional unrestricted double clientY = 0,
+        optional boolean ctrlKey = false, optional boolean altKey = false, optional boolean shiftKey = false, optional boolean metaKey = false,
+        optional EventTarget? target = null, optional unrestricted double scale = 1, optional unrestricted double rotation = 0);
+};

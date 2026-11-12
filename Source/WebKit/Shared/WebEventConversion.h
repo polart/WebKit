@@ -38,7 +38,7 @@
 #endif
 
 #if ENABLE(MAC_GESTURE_EVENTS)
-#include <WebKitAdditions/PlatformGestureEventMac.h>
+#include <WebCore/PlatformGestureEventMac.h>
 #endif
 
 namespace WebKit {

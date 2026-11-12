@@ -24,8 +24,6 @@
 // FIXME: Consider moving this file into the internal SDK, changing the
 // generate-unified-sources.sh script to look for it there.
 
-JSGestureEvent.cpp
 JSTouch.cpp
 JSTouchEvent.cpp
 JSTouchList.cpp
-dom/mac/GestureEvents.cpp

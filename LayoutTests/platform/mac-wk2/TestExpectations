@@ -2710,3 +2710,9 @@ webkit.org/b/331276 [ Debug arm64 ] http/tests/security/contentSecurityPolicy/bl
 webkit.org/b/331277 [ Sequoia+ arm64 ] fast/forms/datetimelocal/datetimelocal-editable-components/datetimelocal-editable-components-focus-and-blur-events.html [ Pass Failure ]
 
 webkit.org/b/298476 [ GoldenGate Debug arm64 ] http/tests/canvas/color-fonts/ctm-sbix-2.html [ Pass Crash ]
+
+# katsura implements ENABLE(MAC_GESTURE_EVENTS) in the open (EventHandlerMacGesture.cpp),
+# so these run here instead of only in Apple's internal expectations.
+fast/events/gesture [ Pass ]
+http/tests/site-isolation/magnify-gesture-coordinates.html [ Pass ]
+http/tests/site-isolation/magnify-gesture-over-cross-origin-pdf-iframe.html [ Pass ]

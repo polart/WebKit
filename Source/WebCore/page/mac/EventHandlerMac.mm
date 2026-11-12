@@ -88,7 +88,7 @@
 #import <wtf/text/TextStream.h>
 
 #if ENABLE(MAC_GESTURE_EVENTS)
-#import <WebKitAdditions/EventHandlerMacGesture.cpp>
+#import "EventHandlerMacGesture.cpp"
 #endif
 
 namespace WebCore {

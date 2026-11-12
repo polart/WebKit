@@ -79,6 +79,7 @@ JSApplePayShippingMethod.cpp
 JSApplePayShippingMethodSelectedEvent.cpp
 JSApplePayShippingMethodUpdate.cpp
 JSApplePayValidateMerchantEvent.cpp
+JSGestureEvent.cpp
 JSSpeechSynthesisErrorCode.cpp
 JSSpeechSynthesisErrorEvent.cpp
 JSSpeechSynthesisErrorEventInit.cpp
@@ -182,6 +183,7 @@ crypto/CommonCryptoUtilities.cpp
 dom/ios/MouseEventIOS.cpp
 dom/ios/PointerEventIOS.cpp
 dom/ios/TouchEvents.cpp
+dom/mac/GestureEvents.cpp
 dom/mac/ImageControlsMac.cpp
 editing/SelectionGeometryGatherer.cpp @header:RenderStyleGetters
 editing/SmartReplaceCF.cpp

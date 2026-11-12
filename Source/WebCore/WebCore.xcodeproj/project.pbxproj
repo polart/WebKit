@@ -59,6 +59,8 @@
 
 /* Begin PBXBuildFile section */
 		34B6CCC60F13AA23BBCDC7D2 /* TaskPriority.h in Headers */ = {isa = PBXBuildFile; fileRef = 1001E771736AA4A1C98FEEC0 /* TaskPriority.h */; };
+		6E57C0DE6E57C0DE00000005 /* PlatformGestureEventMac.h in Headers */ = {isa = PBXBuildFile; fileRef = 6E57C0DE6E57C0DE00000001 /* PlatformGestureEventMac.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		6E57C0DE6E57C0DE00000006 /* GestureEvent.h in Headers */ = {isa = PBXBuildFile; fileRef = 6E57C0DE6E57C0DE00000002 /* GestureEvent.h */; };
 		B37D5734449A2CF7D02E4B5A /* RasterDrawingOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 2346E0FF92D1BDEFA870881B /* RasterDrawingOptions.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		0E527AEF888254BE1ED24498 /* InspectorObjectIdentifier.h in Headers */ = {isa = PBXBuildFile; fileRef = DDB320A5233FB9CC6D07408D /* InspectorObjectIdentifier.h */; };
 		2E86B6A6E3E4C9B02D5AAD6D /* CSSValueKeywords.serialization.in in Headers */ = {isa = PBXBuildFile; fileRef = A41992C7F8B4034E8D8344E8 /* CSSValueKeywords.serialization.in */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -7800,6 +7802,10 @@
 		BB8223E72368C61F458FC3F9 /* DocumentPictureInPicture.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DocumentPictureInPicture.h; sourceTree = "<group>"; };
 		0A119E57223EC9A15AE56292 /* WindowOrWorkerGlobalScope+Scheduler.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = "WindowOrWorkerGlobalScope+Scheduler.idl"; sourceTree = "<group>"; };
 		1001E771736AA4A1C98FEEC0 /* TaskPriority.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TaskPriority.h; sourceTree = "<group>"; };
+		6E57C0DE6E57C0DE00000001 /* PlatformGestureEventMac.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PlatformGestureEventMac.h; sourceTree = "<group>"; };
+		6E57C0DE6E57C0DE00000002 /* GestureEvent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GestureEvent.h; sourceTree = "<group>"; };
+		6E57C0DE6E57C0DE00000003 /* GestureEvent.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = GestureEvent.idl; sourceTree = "<group>"; };
+		6E57C0DE6E57C0DE00000004 /* EventHandlerMacGesture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = EventHandlerMacGesture.cpp; sourceTree = "<group>"; };
 		2346E0FF92D1BDEFA870881B /* RasterDrawingOptions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RasterDrawingOptions.h; sourceTree = "<group>"; };
 		51655728629EA817E5AD8A30 /* SchedulerPostTaskOptions.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = SchedulerPostTaskOptions.idl; sourceTree = "<group>"; };
 		5E092813469595CF2052D556 /* Scheduler.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = Scheduler.idl; sourceTree = "<group>"; };
@@ -31210,6 +31216,7 @@
 				1AF5E4E01E5779B1004A1F01 /* PasteboardWriter.mm */,
 				BCAA486E14A052530088FAC4 /* PlatformEventFactoryMac.h */,
 				BCAA486D14A052530088FAC4 /* PlatformEventFactoryMac.mm */,
+				6E57C0DE6E57C0DE00000001 /* PlatformGestureEventMac.h */,
 				C5F765BA14E1ECF4006C899B /* PlatformPasteboardMac.mm */,
 				BC94D1070C274F88006BC617 /* PlatformScreenMac.mm */,
 				CDA29A151CBDA56C00901CCF /* PlaybackSessionInterfaceMac.h */,
@@ -33388,6 +33395,7 @@
 				94925CE62B320BCC001C62B8 /* CorrectionIndicator.h */,
 				94925CE52B320BCB001C62B8 /* CorrectionIndicator.mm */,
 				93C09A7E0B064EEF005ABD4D /* EventHandlerMac.mm */,
+				6E57C0DE6E57C0DE00000004 /* EventHandlerMacGesture.cpp */,
 				F4B2A90C265087E4009E7286 /* ImageOverlayControllerMac.mm */,
 				2D93AEE119DF5641002A86C3 /* ServicesOverlayController.h */,
 				2D93AEE219DF5641002A86C3 /* ServicesOverlayController.mm */,
@@ -43239,6 +43247,8 @@
 				46781A1328EFCF780095AD63 /* FullscreenOptions.idl */,
 				9BAAC4582151E77A003D4A98 /* GCReachableRef.cpp */,
 				9BAAC4562151E39E003D4A98 /* GCReachableRef.h */,
+				6E57C0DE6E57C0DE00000002 /* GestureEvent.h */,
+				6E57C0DE6E57C0DE00000003 /* GestureEvent.idl */,
 				054E3A33256C3BD90072C5BF /* GetHTMLOptions.h */,
 				054E3A35256C3BD90072C5BF /* GetHTMLOptions.idl */,
 				7C2D722E25083A3400539662 /* GlobalEventHandlers+PointerEvents.idl */,
@@ -46288,6 +46298,7 @@
 				9746AF2E14F4DDE6003E7A70 /* GeolocationPositionError.h in Headers */,
 				0FB6252F18DE1B1500A07C05 /* GeometryUtilities.h in Headers */,
 				46C83EFE1A9BBE2900A79A41 /* GeoNotifier.h in Headers */,
+				6E57C0DE6E57C0DE00000006 /* GestureEvent.h in Headers */,
 				713F1D5A23DF1D8D003F5EFA /* GetAnimationsOptions.h in Headers */,
 				056A7AC8256C4F48002F9DDF /* GetHTMLOptions.h in Headers */,
 				46B95198207D634700A7D2DD /* GlobalFrameIdentifier.h in Headers */,
@@ -48525,6 +48536,7 @@
 				BCAA487014A052530088FAC4 /* PlatformEventFactoryMac.h in Headers */,
 				A723F77B1484CA4C008C6DBE /* PlatformExportMacros.h in Headers */,
 				515BE1951D54F5FB00DD7C68 /* PlatformGamepad.h in Headers */,
+				6E57C0DE6E57C0DE00000005 /* PlatformGestureEventMac.h in Headers */,
 				722AF2E227E1C4050078D997 /* PlatformGraphicsContext.h in Headers */,
 				726D56E2253AE28D0002EF90 /* PlatformImage.h in Headers */,
 				935C476809AC4D4300A6AAB4 /* PlatformKeyboardEvent.h in Headers */,

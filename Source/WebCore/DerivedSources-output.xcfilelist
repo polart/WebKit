@@ -1234,6 +1234,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSFragmentDirective.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSFragmentDirective.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSFullscreenOptions.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSFullscreenOptions.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSGestureEvent.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSGestureEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSGPU.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSGPU.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSGPUAdapter.cpp
