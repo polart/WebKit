@@ -434,7 +434,7 @@
 #include "NavigatorGeolocation.h"
 #endif
 
-#if ENABLE(IOS_GESTURE_EVENTS)
+#if ENABLE(IOS_GESTURE_EVENTS) || ENABLE(MAC_GESTURE_EVENTS)
 #include "GestureEvent.h"
 #endif
 
@@ -7499,6 +7499,11 @@ ExceptionOr<Ref<Event>> Document::createEvent(const String& type)
 #if ENABLE(TOUCH_EVENTS)
     if (equalLettersIgnoringASCIICase(type, "touchevent"_s))
         return Ref<Event> { TouchEvent::createForBindings() };
+#endif
+
+#if ENABLE(MAC_GESTURE_EVENTS)
+    if (equalLettersIgnoringASCIICase(type, "gestureevent"_s))
+        return Ref<Event> { GestureEvent::createForBindings() };
 #endif
 
     // FIXME: Add support for "dragevent", which the DOM specification calls for.

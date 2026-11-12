@@ -2668,3 +2668,9 @@ webkit.org/b/329010 [ Tahoe+ ] compositing/filters/filter-fractional-translation
 webkit.org/b/329010 [ Tahoe+ ] compositing/filters/filter-fractional-translation-flipped.html [ ImageOnlyFailure ]
 webkit.org/b/329010 [ Tahoe+ ] compositing/filters/filter-fractional-translation-perspective.html [ ImageOnlyFailure ]
 webkit.org/b/329010 [ Tahoe+ ] compositing/filters/filter-fractional-translation-rotate-y.html [ ImageOnlyFailure ]
+
+# katsura implements ENABLE(MAC_GESTURE_EVENTS) in the open (EventHandlerMacGesture.cpp),
+# so these run here instead of only in Apple's internal expectations.
+fast/events/gesture [ Pass ]
+http/tests/site-isolation/magnify-gesture-coordinates.html [ Pass ]
+http/tests/site-isolation/magnify-gesture-over-cross-origin-pdf-iframe.html [ Pass ]
